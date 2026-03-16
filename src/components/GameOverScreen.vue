@@ -1,9 +1,7 @@
 <script setup>
-import { useCharacterStore } from '../stores/character'
-import { useCombatStore } from '../stores/combat'
-import { useMetaStore } from '../stores/meta'
+import { useCombatStore } from '../stores/combat.js'
+import { useMetaStore } from '../stores/meta.js'
 
-const char = useCharacterStore()
 const combat = useCombatStore()
 const meta = useMetaStore()
 </script>
@@ -39,22 +37,18 @@ const meta = useMetaStore()
 
       <div class="flex justify-between items-center text-sm">
         <span class="text-dim">Level Reached</span>
-        <span class="text-energy font-bold glow-energy-sm">{{ char.level }}</span>
+        <span class="text-energy font-bold glow-energy-sm">{{ combat.level }}</span>
       </div>
       <div class="flex justify-between items-center text-sm">
-        <span class="text-dim">Enemies Killed</span>
-        <span class="text-xp font-bold">{{ char.kills }}</span>
-      </div>
-      <div class="flex justify-between items-center text-sm">
-        <span class="text-dim">Gun Used</span>
-        <span class="text-gold">{{ char.selectedGun?.name ?? '—' }}</span>
+        <span class="text-dim">Cards Destroyed</span>
+        <span class="text-xp font-bold">{{ combat.cardsDestroyed }}</span>
       </div>
 
-      <div v-if="char.equippedPerkIds.length > 0" class="pt-2 border-t border-white/[0.06]">
+      <div v-if="combat.equippedPerkIds.length > 0" class="pt-2 border-t border-white/[0.06]">
         <div class="text-[9px] text-dim uppercase tracking-widest mb-1">Perks Collected</div>
         <div class="flex flex-wrap gap-1">
           <span
-            v-for="id in char.equippedPerkIds"
+            v-for="id in combat.equippedPerkIds"
             :key="id"
             class="text-[9px] px-1.5 py-0.5 bg-rate/20 border border-rate/30 rounded text-rate"
           >

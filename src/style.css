@@ -60,3 +60,23 @@
 .pulse-glow {
   animation: pulseGlow 1.5s ease-in-out infinite;
 }
+
+/* Card deployment enter animation */
+.deploy-enter-active {
+  animation: deploy-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.deploy-leave-active {
+  animation: deploy-out 0.2s ease-in forwards;
+}
+.deploy-move {
+  transition: transform 0.25s ease;
+}
+
+@keyframes deploy-in {
+  0%   { opacity: 0; transform: translateY(-24px) scale(0.7); }
+  100% { opacity: 1; transform: translateY(0)     scale(1);   }
+}
+@keyframes deploy-out {
+  0%   { opacity: 1; transform: scale(1);    }
+  100% { opacity: 0; transform: scale(0.6);  }
+}

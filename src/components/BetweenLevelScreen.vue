@@ -1,11 +1,8 @@
 <script setup>
 import { ref } from 'vue'
-import { useCharacterStore } from '../stores/character'
-import { useCombatStore } from '../stores/combat'
+import { useCombatStore } from '../stores/combat.js'
 
-const char = useCharacterStore()
 const combat = useCombatStore()
-
 const selectedPerk = ref(null)
 
 function selectPerk(perk) {
@@ -24,9 +21,9 @@ function advance() {
 
     <!-- Header -->
     <div class="text-center">
-      <div class="text-xs text-xp uppercase tracking-[0.3em] mb-1">Level {{ char.level }} cleared!</div>
+      <div class="text-xs text-xp uppercase tracking-[0.3em] mb-1">Level {{ combat.level }} cleared!</div>
       <h2 class="text-xl font-extrabold text-energy glow-energy tracking-widest uppercase">
-        Upgrade your loadout
+        Upgrade your deck
       </h2>
     </div>
 
@@ -37,7 +34,7 @@ function advance() {
       <div class="flex flex-col gap-3 flex-1">
         <div class="flex items-center justify-between">
           <h3 class="text-xs text-dim uppercase tracking-widest">Shop</h3>
-          <span class="text-energy glow-energy-sm font-bold font-mono text-sm">⚡ {{ char.energy }}</span>
+          <span class="text-gold font-bold font-mono text-sm">{{ combat.gold }} 🪙</span>
         </div>
 
         <div class="grid grid-cols-2 gap-2">
@@ -46,19 +43,19 @@ function advance() {
             :key="item.id"
             class="flex flex-col gap-1.5 p-3 rounded-lg border transition-all duration-100"
             :class="[
-              char.energy >= item.cost
+              combat.gold >= item.cost
                 ? 'bg-surface border-white/15 cursor-pointer hover:border-energy hover:bg-energy/5 active:scale-95'
                 : 'bg-surface/50 border-white/[0.06] opacity-45 cursor-not-allowed',
             ]"
-            @click="char.energy >= item.cost && combat.buyShopItem(item)"
+            @click="combat.gold >= item.cost && combat.buyShopItem(item)"
           >
             <div class="flex items-center gap-2">
               <span class="text-xl">{{ item.emoji }}</span>
               <span class="text-xs font-semibold text-slate-200">{{ item.name }}</span>
             </div>
             <div class="text-[10px] text-dim">{{ item.desc }}</div>
-            <div class="text-xs font-bold font-mono mt-auto" :class="char.energy >= item.cost ? 'text-energy' : 'text-hp'">
-              ⚡ {{ item.cost }}
+            <div class="text-xs font-bold font-mono mt-auto" :class="combat.gold >= item.cost ? 'text-gold' : 'text-hp'">
+              {{ item.cost }} 🪙
             </div>
           </div>
         </div>

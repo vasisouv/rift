@@ -13,9 +13,9 @@ export const useGameStore = defineStore('game', {
     load() {
       const meta = useMetaStore()
       meta.load()
-      // Always land on gun select — no run state is restored
+      // Always land on start-run — no run state is restored
       const combat = useCombatStore()
-      combat.phase = 'gun-select'
+      combat.phase = 'start-run'
     },
 
     // Wipes everything — run + meta — back to a fresh first-load state.

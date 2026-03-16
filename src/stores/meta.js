@@ -29,16 +29,17 @@ export const useMetaStore = defineStore('meta', {
       return Math.max(1, 3 - reduction)
     },
 
-    // All bonus values to apply at run start
+    // All bonus values to apply at run start (card-game keys)
     startingBonuses(state) {
       return {
-        maxHpBonus:           (state.purchasedLevels['starting_hp'] ?? 0) * 20,
-        startingEnergy:       (state.purchasedLevels['starting_energy'] ?? 0) * 50,
-        damageMultiplier:     Math.pow(1.1, state.purchasedLevels['damage_boost'] ?? 0),
-        defenseBonus:         (state.purchasedLevels['defense_boost'] ?? 0) * 2,
-        critBonus:            (state.purchasedLevels['crit_boost'] ?? 0) * 0.05,
-        lifeSteal:            (state.purchasedLevels['lifesteal'] ?? 0) * 0.05,
-        startingPerk:         (state.purchasedLevels['starting_perk'] ?? 0) >= 1,
+        maxHp:           (state.purchasedLevels['starting_hp'] ?? 0) * 20,
+        extraStartCards: (state.purchasedLevels['starting_energy'] ?? 0) > 0 ? 1 : 0,
+        atkBonus:        (state.purchasedLevels['damage_boost'] ?? 0),
+        defense:         (state.purchasedLevels['defense_boost'] ?? 0) * 2,
+        critChance:      (state.purchasedLevels['crit_boost'] ?? 0) * 0.05,
+        lifestealChance: (state.purchasedLevels['lifesteal'] ?? 0) * 0.05,
+        extraTier2Card:  (state.purchasedLevels['power_cooldown'] ?? 0) >= 1,
+        startingPerk:    (state.purchasedLevels['starting_perk'] ?? 0) >= 1,
       }
     },
 

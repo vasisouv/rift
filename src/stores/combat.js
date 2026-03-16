@@ -1,539 +1,544 @@
 import { defineStore } from 'pinia'
-import { useCharacterStore } from './character'
-import { useMetaStore } from './meta'
-import { useSoundStore } from './sound'
-import { getEnemyTypesForLevel } from '../data/enemyTypes'
-import { getBossForLevel } from '../data/bossTypes'
-import { getRandomPerks } from '../data/perks'
-import { SHOP_ITEMS } from '../data/shopItems'
+import { getCardDef, getStartingDeck, buildEnemyDeck } from '../data/cards.js'
+import { SHOP_ITEMS } from '../data/shopItems.js'
+import { PERKS } from '../data/perks.js'
+import { useMetaStore } from './meta.js'
+import { useSoundStore } from './sound.js'
 
-let _enemyIdCounter = 0
-
-function pickNextAction(isBoss = false) {
-  const r = Math.random()
-  if (isBoss) {
-    if (r < 0.55) return 'attack'
-    if (r < 0.77) return 'charge'
-    if (r < 0.92) return 'shield'
-    return 'regen'
-  }
-  if (r < 0.65) return 'attack'
-  if (r < 0.80) return 'charge'
-  if (r < 0.92) return 'shield'
-  return 'regen'
-}
-
-function createEnemy(type, level) {
-  const hpScale = Math.pow(1.15, level - 1)
-  const atkScale = Math.pow(1.10, level - 1)
+let _instanceCounter = 0
+function makeInstance(defId, owner, atkBonus = 0) {
+  const def = getCardDef(defId)
+  if (!def) return null
   return {
-    id: ++_enemyIdCounter,
-    typeId: type.id,
-    name: type.name,
-    emoji: type.emoji,
-    hp: Math.round(type.baseHp * hpScale),
-    maxHp: Math.round(type.baseHp * hpScale),
-    atk: Math.round(type.baseAtk * atkScale),
-    energyReward: type.energyReward,
-    color: type.color,
-    x: 0,
-    y: 0,
-    taunt: type.taunt ?? false,
-    isBoss: false,
-    isDead: false,
+    instanceId: `card_${++_instanceCounter}`,
+    defId: def.id,
+    name: def.name,
+    emoji: def.emoji,
+    atk: def.baseAtk + atkBonus,
+    hp: def.baseHp,
+    maxHp: def.baseHp,
+    manaCost: def.manaCost,
+    color: def.color,
+    owner,
+    hasSummoningSickness: true,
+    hasAttackedThisTurn: false,
     hitFlash: false,
-    nextAction: 'attack',
-    burnTurns: 0,
+    attacking: false,
   }
 }
 
-function createBoss(bossType, level) {
-  const hpScale = Math.pow(1.15, level - 1)
-  const atkScale = Math.pow(1.10, level - 1)
-  return {
-    id: ++_enemyIdCounter,
-    typeId: bossType.id,
-    name: bossType.name,
-    emoji: bossType.emoji,
-    hp: Math.round(60 * hpScale * bossType.hpMultiplier),
-    maxHp: Math.round(60 * hpScale * bossType.hpMultiplier),
-    atk: Math.round(8 * atkScale * bossType.atkMultiplier),
-    energyReward: bossType.energyReward,
-    color: bossType.color,
-    x: 65,
-    y: 38,
-    isBoss: true,
-    isDead: false,
-    hitFlash: false,
-    nextAction: 'attack',
-    burnTurns: 0,
+function shuffle(arr) {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
   }
+  return a
 }
 
-function buildEncounterSizes(totalEnemies) {
-  const sizes = []
-  let remaining = totalEnemies
-  while (remaining > 0) {
-    const maxGroup = Math.min(3, remaining)
-    const size = Math.floor(Math.random() * maxGroup) + 1
-    sizes.push(size)
-    remaining -= size
-  }
-  return sizes
-}
-
-function positionEnemies(enemies) {
-  const n = enemies.length
-  if (n === 1) {
-    enemies[0].x = 65; enemies[0].y = 38
-  } else if (n === 2) {
-    enemies[0].x = 58; enemies[0].y = 28
-    enemies[1].x = 72; enemies[1].y = 52
-  } else {
-    enemies[0].x = 55; enemies[0].y = 22
-    enemies[1].x = 68; enemies[1].y = 42
-    enemies[2].x = 55; enemies[2].y = 60
-  }
+function pickRandom(arr, n) {
+  return shuffle(arr).slice(0, n)
 }
 
 export const useCombatStore = defineStore('combat', {
   state: () => ({
-    encounterSizes: [],
-    currentEncounterIdx: 0,
-    totalEnemyCount: 0,
-    enemiesDefeated: 0,
-
-    enemies: [],
-    phase: 'gun-select', // 'gun-select'|'combat'|'boss'|'between-level'|'game-over'|'meta-shop'
-    bossSpawned: false,
-    targetedEnemyId: null,
-
+    phase: 'start-run',
+    level: 1,
     currentTurn: 'player',
-    powerStrikeCooldownTurns: 0,
+
+    // Heroes
+    playerHp: 50, playerMaxHp: 50,
+    enemyHp: 50,  enemyMaxHp: 50,
+    enemyName: 'Void Wraith', enemyEmoji: '👾',
+
+    // Mana
+    playerMana: 1, playerManaMax: 1,
+    enemyMana:  1, enemyManaMax:  1,
+
+    // Decks (arrays of def IDs, last = top of deck)
+    playerDeck: [], enemyDeck: [],
+
+    // Hands (card instances)
+    playerHand: [], enemyHand: [],
+
+    // Boards (max 5 each)
+    playerBoard: [], enemyBoard: [],
+
+    // UI selection state
+    selectedHandCardId: null,
+    attackingCardId: null,
+
+    // Run tracking
+    gold: 0,
+    cardsDestroyed: 0,
+    equippedPerkIds: [],
+
+    // Applied bonuses from meta/perks
+    _atkBonus: 0,
+    _defenseBonus: 0,
+    _critChance: 0,
+    _lifesteal: false,
+    _extraStartCard: false,
+    _extraTier2Card: false,
+
+    // Offers
+    shopOffers: [], perkOffers: [],
+    lastRunShards: 0,
 
     combatLog: [],
-    shopOffers: [],
-    perkOffers: [],
-
-    // Game over stats
-    lastRunShards: 0,
   }),
 
-  getters: {
-    activeEnemies(state) {
-      return state.enemies.filter(e => !e.isDead)
-    },
-
-    currentTarget(state) {
-      const active = state.enemies.filter(e => !e.isDead)
-      if (state.targetedEnemyId) {
-        const t = active.find(e => e.id === state.targetedEnemyId)
-        if (t) return t
-      }
-      return active[0] || null
-    },
-
-    encounterProgress(state) {
-      return {
-        current: state.currentEncounterIdx + 1,
-        total: state.encounterSizes.length,
-        defeated: state.enemiesDefeated,
-        totalEnemies: state.totalEnemyCount,
-      }
-    },
-
-    isPowerReady(state) {
-      return state.powerStrikeCooldownTurns === 0
-    },
-
-    tauntTarget(state) {
-      return state.enemies.find(e => !e.isDead && e.taunt) ?? null
-    },
-  },
-
   actions: {
-    addLog(message, type = 'info') {
-      this.combatLog.unshift({ message, type, id: Date.now() + Math.random() })
-      if (this.combatLog.length > 6) this.combatLog.pop()
+    _log(msg, type = 'info') {
+      this.combatLog.push({ msg, type, id: Date.now() + Math.random() })
+      if (this.combatLog.length > 30) this.combatLog.shift()
     },
 
-    // ── Start / Spawn ─────────────────────────────────────────────────────────
+    // ── Run lifecycle ────────────────────────────────────────────────────────
 
-    startRun(gun) {
-      const char = useCharacterStore()
+    startRun() {
       const meta = useMetaStore()
-      char.selectGun(gun)
-      meta.applyToCharacter(char)   // apply persistent meta bonuses
+      const bonuses = meta.startingBonuses
+
+      this.playerMaxHp = 50 + (bonuses.maxHp ?? 0)
+      this.playerHp = this.playerMaxHp
+      this.level = 1
+      this.gold = 0
+      this.cardsDestroyed = 0
+      this.equippedPerkIds = []
+      this._atkBonus = bonuses.atkBonus ?? 0
+      this._defenseBonus = bonuses.defense ?? 0
+      this._critChance = bonuses.critChance ?? 0
+      this._lifesteal = (bonuses.lifestealChance ?? 0) > 0
+      this._extraStartCard = (bonuses.extraStartCards ?? 0) > 0
+      this._extraTier2Card = (bonuses.extraTier2Card ?? false)
+
+      if (bonuses.startingPerk) {
+        const perk = PERKS[Math.floor(Math.random() * PERKS.length)]
+        this._applyPerk(perk)
+        this._log(`Meta bonus: started with ${perk.name}`, 'perk')
+      }
+
       this.startLevel()
     },
 
     startLevel() {
-      const char = useCharacterStore()
-      const level = char.level
-      const totalEnemies = 3 + level
-      this.encounterSizes = buildEncounterSizes(totalEnemies)
-      this.totalEnemyCount = totalEnemies
-      this.currentEncounterIdx = 0
-      this.enemiesDefeated = 0
-      this.bossSpawned = false
-      this.shopPhaseComplete = false
+      const sound = useSoundStore()
+
+      let startDeck = shuffle(getStartingDeck())
+      if (this._extraTier2Card) startDeck = [...startDeck, 'specter']
+      this.playerDeck = shuffle(startDeck)
+
+      this.enemyDeck = buildEnemyDeck(this.level)
+
+      this.playerHand = []
+      this.playerBoard = []
+      this.enemyHand = []
+      this.enemyBoard = []
+
+      this.playerMana = 1
+      this.playerManaMax = 1
+      this.enemyMana = 1
+      this.enemyManaMax = 1
+
+      const enemies = ['👾', '👻', '🌀', '☄️', '💀', '🌌', '👑']
+      const names = ['Void Wraith', 'Specter Lord', 'Rift Walker', 'Stellar Horror', 'Void Lich', 'Nebula Titan', 'Void Sovereign']
+      const idx = (this.level - 1) % enemies.length
+      this.enemyEmoji = enemies[idx]
+      this.enemyName = names[idx]
+      this.enemyHp = 50
+      this.enemyMaxHp = 50
+
+      this.drawCard('player')
+      this.drawCard('player')
+      this.drawCard('player')
+      if (this._extraStartCard) this.drawCard('player')
+
+      this.drawCard('enemy')
+      this.drawCard('enemy')
+      this.drawCard('enemy')
+
+      this.selectedHandCardId = null
+      this.attackingCardId = null
+      this.currentTurn = 'player'
       this.phase = 'combat'
-      this.currentTurn = 'player'
-      this.powerStrikeCooldownTurns = 0
-      this.enemies = []
-      this.targetedEnemyId = null
-      this._spawnCurrentEncounter()
-      this.addLog(`Level ${level} — ${this.encounterSizes.length} encounters + boss!`, 'level')
+
+      sound.startMusic?.(false)
+      this._log(`Level ${this.level} — fight!`, 'level')
     },
 
-    _spawnCurrentEncounter() {
-      const char = useCharacterStore()
-      const level = char.level
-      const count = this.encounterSizes[this.currentEncounterIdx]
-      const availableTypes = getEnemyTypesForLevel(level)
+    // ── Card draw ────────────────────────────────────────────────────────────
 
-      const spawned = []
-      for (let i = 0; i < count; i++) {
-        const type = availableTypes[Math.floor(Math.random() * availableTypes.length)]
-        spawned.push(createEnemy(type, level))
-      }
-      positionEnemies(spawned)
-
-      this.enemies = spawned
-      this.targetedEnemyId = spawned[0].id
-
-      const encNum = this.currentEncounterIdx + 1
-      const total = this.encounterSizes.length
-      const label = count > 1 ? `${count} enemies` : `1 enemy`
-      this.addLog(`Encounter ${encNum}/${total}: ${label}!`, 'level')
+    drawCard(owner) {
+      const deck = owner === 'player' ? this.playerDeck : this.enemyDeck
+      const hand = owner === 'player' ? this.playerHand : this.enemyHand
+      if (deck.length === 0) return
+      const defId = deck.pop()
+      const inst = makeInstance(defId, owner, owner === 'player' ? this._atkBonus : 0)
+      if (inst) hand.push(inst)
     },
 
-    spawnBoss() {
-      const char = useCharacterStore()
-      const bossType = getBossForLevel(char.level)
-      const boss = createBoss(bossType, char.level)
-      this.enemies = [boss]
-      this.bossSpawned = true
-      this.phase = 'boss'
-      this.targetedEnemyId = boss.id
-      this.currentTurn = 'player'
-      useSoundStore().bossSpawn()
-      this.addLog(`⚠️ BOSS: ${bossType.name}!`, 'boss')
-    },
+    // ── Hand / board actions ─────────────────────────────────────────────────
 
-    setTarget(enemyId) {
-      const enemy = this.enemies.find(e => e.id === enemyId && !e.isDead)
-      if (enemy) this.targetedEnemyId = enemyId
-    },
-
-    cycleTarget() {
-      const alive = this.enemies.filter(e => !e.isDead)
-      if (alive.length <= 1) return
-      const currentIdx = alive.findIndex(e => e.id === this.targetedEnemyId)
-      const next = alive[(currentIdx + 1) % alive.length]
-      this.targetedEnemyId = next.id
-    },
-
-    // ── Player Actions ────────────────────────────────────────────────────────
-
-    playerAttack() {
+    selectHandCard(id) {
       if (this.currentTurn !== 'player') return
-      if (this.phase !== 'combat' && this.phase !== 'boss') return
-      if (!this.currentTarget) return
-
-      const taunt = this.tauntTarget
-      const target = taunt ?? this.currentTarget
-      if (taunt && taunt.id !== this.currentTarget?.id)
-        this.addLog(`🛡 Sentinel intercepts!`, 'info')
-
-      this.currentTurn = 'enemy'
-      this._performAttack(target)
-
-      const char = useCharacterStore()
-      if (char.doubleShot) {
-        const t2 = taunt ?? this.currentTarget
-        if (t2) this._performAttack(t2)
+      if (this.selectedHandCardId === id) {
+        this.selectedHandCardId = null
+        return
       }
-
-      this._afterPlayerAction()
+      const card = this.playerHand.find(c => c.instanceId === id)
+      if (!card) return
+      if (card.manaCost > this.playerMana) return
+      this.selectedHandCardId = id
+      this.attackingCardId = null
     },
 
-    playerPowerAttack() {
+    playCardToBoard() {
+      if (!this.selectedHandCardId) return
+      const card = this.playerHand.find(c => c.instanceId === this.selectedHandCardId)
+      if (!card) { this.selectedHandCardId = null; return }
+      if (card.manaCost > this.playerMana) return
+      if (this.playerBoard.length >= 5) return
+
+      const sound = useSoundStore()
+      this.playerMana -= card.manaCost
+      this.playerHand = this.playerHand.filter(c => c.instanceId !== card.instanceId)
+      card.hasSummoningSickness = true
+      card.hasAttackedThisTurn = false
+      this.playerBoard.push(card)
+      this.selectedHandCardId = null
+      sound.cardPlay?.()
+      this._log(`You played ${card.name}`, 'info')
+    },
+
+    selectBoardCard(id) {
       if (this.currentTurn !== 'player') return
-      if (this.powerStrikeCooldownTurns > 0) return
-      if (this.phase !== 'combat' && this.phase !== 'boss') return
-
-      const meta = useMetaStore()
-      this.powerStrikeCooldownTurns = meta.powerStrikeCooldown
-      this.currentTurn = 'enemy'
-      useSoundStore().power()
-
-      const char = useCharacterStore()
-      const gun = char.selectedGun
-      const taunt = this.tauntTarget
-      const targets = gun.special === 'pellet_spread'
-        ? [...this.activeEnemies]
-        : (taunt ? [taunt] : (this.currentTarget ? [this.currentTarget] : []))
-      if (taunt && gun.special !== 'pellet_spread' && taunt.id !== this.currentTarget?.id)
-        this.addLog(`🛡 Sentinel intercepts the power strike!`, 'info')
-
-      for (const target of targets) {
-        if (target.isDead) continue
-        const dmg = Math.round(char.totalAttack * 3)
-        target.hp = Math.max(0, target.hp - dmg)
-        target.hitFlash = true
-        setTimeout(() => { if (target) target.hitFlash = false }, 250)
-        this.addLog(`⚡ POWER → ${target.name}: -${dmg}!`, 'power')
-        if (target.hp <= 0) {
-          target.isDead = true
-          this._onEnemyDeath(target)
-        } else if (target.nextAction !== 'stunned' && Math.random() < 0.50) {
-          target.nextAction = 'stunned'
-          this.addLog(`💫 ${target.name} stunned!`, 'info')
-        }
+      if (this.selectedHandCardId) {
+        this.playCardToBoard()
+        return
       }
-
-      this._afterPlayerAction()
+      const card = this.playerBoard.find(c => c.instanceId === id)
+      if (!card) return
+      if (card.hasSummoningSickness || card.hasAttackedThisTurn) return
+      this.attackingCardId = this.attackingCardId === id ? null : id
     },
 
-    playerGuard() {
-      if (this.currentTurn !== 'player') return
-      if (this.phase !== 'combat' && this.phase !== 'boss') return
-      const char = useCharacterStore()
-      char.isGuarding = true
-      this.currentTurn = 'enemy'
-      useSoundStore().guard()
-      this.addLog('🛡 Guard! Bracing for impact...', 'info')
-      this._doEnemyTurn()
-    },
+    attackTarget(targetId) {
+      if (!this.attackingCardId) return
+      const attacker = this.playerBoard.find(c => c.instanceId === this.attackingCardId)
+      if (!attacker) { this.attackingCardId = null; return }
 
-    _performAttack(target) {
-      if (!target || target.isDead) return
-      const char = useCharacterStore()
-      const gun = char.selectedGun
+      const sound = useSoundStore()
 
-      for (let p = 0; p < gun.pellets; p++) {
-        if (target.isDead) break
-
-        let dmg = char.totalAttack
-        let critChance = 0.10 + char.critBonus
-        if (gun.special === 'low_hp_crit' && char.isLowHp) critChance += 0.15
-        const isCrit = Math.random() < critChance
-        if (isCrit) dmg = Math.round(dmg * 2)
-
-        if (target.nextAction === 'shield') dmg = Math.round(dmg * 0.5)
-
-        const actualDmg = Math.max(1, dmg)
-        target.hp = Math.max(0, target.hp - actualDmg)
-        target.hitFlash = true
-        setTimeout(() => { if (target) target.hitFlash = false }, 250)
-
-        const sound = useSoundStore()
-        if (isCrit) sound.crit()
-        else sound.attack()
-
-        const critText = isCrit ? ' CRIT!' : ''
-        if (gun.pellets > 1) {
-          this.addLog(`Pellet → ${target.name}: -${actualDmg}${critText}`, 'hit')
+      if (targetId === 'enemy-hero') {
+        let dmg = attacker.atk
+        if (Math.random() < this._critChance) {
+          dmg *= 2
+          this._log(`Crit! ${attacker.name} deals ${dmg} to enemy hero`, 'crit')
+          sound.crit?.()
         } else {
-          this.addLog(`${gun.name} → ${target.name}: -${actualDmg}${critText}`, 'hit')
+          this._log(`${attacker.name} attacks enemy hero for ${dmg}`, 'hit')
+          sound.attack?.()
         }
-
-        if (isCrit && Math.random() < 0.30) {
-          target.burnTurns = Math.max(target.burnTurns, 2)
-          this.addLog(`🔥 ${target.name} ignites!`, 'burn')
-        }
-
-        if (char.lifeSteal > 0) {
-          char.heal(Math.max(1, Math.round(actualDmg * char.lifeSteal)))
-        }
-
-        if (target.hp <= 0) {
-          target.isDead = true
-          this._onEnemyDeath(target)
-        }
-      }
-    },
-
-    _onEnemyDeath(enemy) {
-      const char = useCharacterStore()
-      char.addKill()
-      char.gainEnergy(enemy.energyReward)
-      this.enemiesDefeated++
-      if (this.targetedEnemyId === enemy.id) this.targetedEnemyId = null
-      useSoundStore().enemyDeath()
-      this.addLog(`${enemy.name} defeated! +${Math.round(enemy.energyReward * char.energyMultiplier)} ⚡`, 'kill')
-    },
-
-    // ── Turn Resolution ───────────────────────────────────────────────────────
-
-    _afterPlayerAction() {
-      if (this._checkClear()) return
-      this._doEnemyTurn()
-    },
-
-    _checkClear() {
-      const alive = this.enemies.filter(e => !e.isDead)
-      if (alive.length > 0) return false
-
-      if (this.phase === 'boss') {
-        this._onBossKill()
-        return true
+        this._animateAttack(attacker)
+        this.enemyHp = Math.max(0, this.enemyHp - dmg)
+        attacker.hasAttackedThisTurn = true
+        this._flashCard(attacker)
+        this.attackingCardId = null
+        this._checkVictory()
+        return
       }
 
-      this.currentEncounterIdx++
-      if (this.currentEncounterIdx >= this.encounterSizes.length) {
-        this.addLog('All encounters cleared! BOSS incoming!', 'level')
-        this.spawnBoss()
+      const defender = this.enemyBoard.find(c => c.instanceId === targetId)
+      if (!defender) { this.attackingCardId = null; return }
+
+      this._resolveCardCombat(attacker, defender)
+      this.attackingCardId = null
+    },
+
+    _resolveCardCombat(attacker, defender) {
+      const sound = useSoundStore()
+      let atkDmg = attacker.atk
+      const defDmg = defender.atk
+
+      if (Math.random() < this._critChance) {
+        atkDmg *= 2
+        sound.crit?.()
       } else {
-        this._spawnCurrentEncounter()
-        this.currentTurn = 'player'
+        sound.attack?.()
       }
-      return true
+
+      this._animateAttack(attacker)
+      defender.hp -= atkDmg
+      attacker.hp -= defDmg
+
+      this._flashCard(attacker)
+      this._flashCard(defender)
+      this._log(`${attacker.name} (${atkDmg}) vs ${defender.name} (${defDmg})`, 'hit')
+
+      attacker.hasAttackedThisTurn = true
+
+      if (this._lifesteal && attacker.owner === 'player' && defender.hp <= 0) {
+        this.playerHp = Math.min(this.playerMaxHp, this.playerHp + 1)
+        this._log('Lifesteal: +1 HP', 'heal')
+      }
+
+      this._checkCardDeath(attacker)
+      this._checkCardDeath(defender)
     },
 
-    _doEnemyTurn() {
-      const char = useCharacterStore()
+    _checkCardDeath(card) {
+      if (card.hp > 0) return
+      const sound = useSoundStore()
+      if (card.owner === 'player') {
+        this.playerBoard = this.playerBoard.filter(c => c.instanceId !== card.instanceId)
+      } else {
+        this.enemyBoard = this.enemyBoard.filter(c => c.instanceId !== card.instanceId)
+        this.cardsDestroyed++
+      }
+      sound.enemyDeath?.()
+      this._log(`${card.name} was destroyed`, 'kill')
+    },
 
-      // Reset guard at start of enemy turn
-      char.isGuarding = false
+    _flashCard(card) {
+      card.hitFlash = true
+      setTimeout(() => { card.hitFlash = false }, 300)
+    },
 
-      // Process burn on all living enemies
-      for (const enemy of this.enemies) {
-        if (enemy.isDead || enemy.burnTurns <= 0) continue
-        const burnDmg = Math.round(enemy.maxHp * 0.08)
-        enemy.hp = Math.max(0, enemy.hp - burnDmg)
-        enemy.burnTurns--
-        useSoundStore().burn()
-        this.addLog(`🔥 ${enemy.name} burns for -${burnDmg}!`, 'burn')
-        if (enemy.hp <= 0) {
-          enemy.isDead = true
-          this._onEnemyDeath(enemy)
+    _animateAttack(card) {
+      card.attacking = true
+      setTimeout(() => { card.attacking = false }, 400)
+    },
+
+    // ── Turn management ──────────────────────────────────────────────────────
+
+    endPlayerTurn() {
+      if (this.currentTurn !== 'player') return
+      const sound = useSoundStore()
+      sound.turnEnd?.()
+      this.selectedHandCardId = null
+      this.attackingCardId = null
+      this.currentTurn = 'enemy'
+      this._doEnemyTurn()
+    },
+
+    async _doEnemyTurn() {
+      const sound = useSoundStore()
+      const delay = (ms) => new Promise(r => setTimeout(r, ms))
+
+      this.enemyManaMax = Math.min(10, this.enemyManaMax + 1)
+      this.enemyMana = this.enemyManaMax
+
+      await delay(700)
+      this.drawCard('enemy')
+
+      let played = true
+      while (played) {
+        played = false
+        await delay(600)
+        const playable = this.enemyHand
+          .filter(c => c.manaCost <= this.enemyMana && this.enemyBoard.length < 5)
+          .sort((a, b) => b.manaCost - a.manaCost)
+        if (playable.length > 0) {
+          const card = playable[0]
+          this.enemyMana -= card.manaCost
+          this.enemyHand = this.enemyHand.filter(c => c.instanceId !== card.instanceId)
+          card.hasSummoningSickness = true
+          card.hasAttackedThisTurn = false
+          this.enemyBoard.push(card)
+          sound.cardPlay?.()
+          this._log(`Enemy plays ${card.name}`, 'info')
+          played = true
         }
       }
 
-      if (this._checkClear()) return
+      await delay(700)
+      const attackers = this.enemyBoard.filter(c => !c.hasSummoningSickness && !c.hasAttackedThisTurn)
+      for (const attacker of attackers) {
+        await delay(750)
+        if (this.phase !== 'combat') return
 
-      // Enemy attacks
-      for (const enemy of this.enemies) {
-        if (enemy.isDead) continue
-
-        if (enemy.nextAction === 'stunned') {
-          this.addLog(`💫 ${enemy.name} is stunned!`, 'info')
-        } else if (enemy.nextAction === 'regen') {
-          const healAmt = Math.round(enemy.maxHp * 0.10)
-          enemy.hp = Math.min(enemy.maxHp, enemy.hp + healAmt)
-          this.addLog(`💚 ${enemy.name} regens ${healAmt} HP!`, 'info')
+        const playerCards = this.playerBoard.filter(c => c.hp > 0)
+        if (playerCards.length > 0) {
+          const target = playerCards.reduce((min, c) => c.hp < min.hp ? c : min, playerCards[0])
+          this._resolveEnemyAttackCard(attacker, target)
         } else {
-          let atkDmg = enemy.atk
-          if (enemy.nextAction === 'charge') atkDmg = Math.round(atkDmg * 2)
-          const dmg = char.takeDamage(atkDmg)
-          useSoundStore().enemyHit()
-          this.addLog(`${enemy.name}: -${dmg} HP`, 'damage')
-          if (char.hp <= 0) {
-            // Assign next actions before returning so we don't get stale state
-            for (const e of this.enemies) {
-              if (!e.isDead) e.nextAction = pickNextAction(e.isBoss)
-            }
-            if (this.powerStrikeCooldownTurns > 0) this.powerStrikeCooldownTurns--
-            this._onPlayerDeath()
-            return
-          }
+          const dmg = Math.max(0, attacker.atk - this._defenseBonus)
+          this._log(`Enemy ${attacker.name} attacks you for ${dmg}`, 'damage')
+          sound.enemyHit?.()
+          this._animateAttack(attacker)
+          this.playerHp = Math.max(0, this.playerHp - dmg)
+          attacker.hasAttackedThisTurn = true
+          this._flashCard(attacker)
+          this._checkPlayerDeath()
+          if (this.phase !== 'combat') return
         }
       }
 
-      // Assign next actions for all living enemies
-      for (const enemy of this.enemies) {
-        if (!enemy.isDead) {
-          enemy.nextAction = pickNextAction(enemy.isBoss)
-        }
+      await delay(600)
+      this._endEnemyTurn()
+    },
+
+    _resolveEnemyAttackCard(attacker, defender) {
+      const sound = useSoundStore()
+      const atkDmg = attacker.atk
+      const defDmg = defender.atk
+
+      this._animateAttack(attacker)
+      defender.hp -= atkDmg
+      attacker.hp -= defDmg
+
+      this._flashCard(attacker)
+      this._flashCard(defender)
+      sound.enemyHit?.()
+      this._log(`Enemy ${attacker.name} (${atkDmg}) vs your ${defender.name} (${defDmg})`, 'hit')
+
+      attacker.hasAttackedThisTurn = true
+
+      this._checkCardDeath(attacker)
+      this._checkCardDeath(defender)
+    },
+
+    _endEnemyTurn() {
+      if (this.phase !== 'combat') return
+
+      this.playerManaMax = Math.min(10, this.playerManaMax + 1)
+      this.playerMana = this.playerManaMax
+
+      this.drawCard('player')
+
+      for (const card of this.playerBoard) {
+        card.hasSummoningSickness = false
+        card.hasAttackedThisTurn = false
+      }
+      for (const card of this.enemyBoard) {
+        card.hasAttackedThisTurn = false
+        card.hasSummoningSickness = false
       }
 
-      if (this.powerStrikeCooldownTurns > 0) this.powerStrikeCooldownTurns--
       this.currentTurn = 'player'
+      this._log('Your turn', 'info')
     },
 
-    // ── Phase Transitions ─────────────────────────────────────────────────────
+    // ── Victory / Defeat ─────────────────────────────────────────────────────
 
-    _onBossKill() {
-      const char = useCharacterStore()
-      useSoundStore().stopMusic()
-      useSoundStore().bossDeath()
-      this.addLog(`🏆 Boss defeated! Level ${char.level} cleared!`, 'level')
-      this.phase = 'between-level'
-      // Show 4 randomly picked shop items each time
-      this.shopOffers = [...SHOP_ITEMS].sort(() => Math.random() - 0.5).slice(0, 4)
-      this.perkOffers = getRandomPerks(3, char.equippedPerkIds)
+    _checkVictory() {
+      if (this.enemyHp <= 0) {
+        const sound = useSoundStore()
+        sound.bossDeath?.()
+        sound.stopMusic?.()
+        const goldEarned = 10 + this.level * 5
+        this.gold += goldEarned
+        this._log(`Enemy defeated! +${goldEarned} gold`, 'level')
+        this._generateOffers()
+        this.phase = 'between-level'
+      }
     },
 
-    _onPlayerDeath() {
-      const char = useCharacterStore()
-      const meta = useMetaStore()
-
-      // Calculate and award void shards
-      const shards = Math.floor(char.level * 15 + char.kills * 3 + (char.level - 1) * 25)
-      this.lastRunShards = shards
-      meta.earnShards(shards)
-      meta.recordRun()
-      meta.save()
-
-      this.phase = 'game-over'
-      useSoundStore().stopMusic()
-      useSoundStore().playerDeath()
-      this.addLog(`💀 Fell at level ${char.level}. +${shards} shards`, 'death')
+    _checkPlayerDeath() {
+      if (this.playerHp <= 0) {
+        const meta = useMetaStore()
+        const sound = useSoundStore()
+        sound.playerDeath?.()
+        sound.stopMusic?.()
+        const shards = this.level * 15 + this.cardsDestroyed * 3 + (this.level - 1) * 25
+        this.lastRunShards = shards
+        meta.earnShards(shards)
+        meta.recordRun()
+        meta.save()
+        this._log('You were defeated!', 'death')
+        this.phase = 'game-over'
+      }
     },
 
-    // ── Meta Shop Navigation ──────────────────────────────────────────────────
+    // ── Between-level offers ─────────────────────────────────────────────────
 
-    goToMetaShop() {
-      this.phase = 'meta-shop'
+    _generateOffers() {
+      this.shopOffers = pickRandom(SHOP_ITEMS, 4)
+      const available = PERKS.filter(p => !this.equippedPerkIds.includes(p.id))
+      this.perkOffers = pickRandom(available, Math.min(3, available.length))
     },
-
-    exitMetaShop() {
-      this.restartRun() // resets char + sets phase = 'gun-select'
-    },
-
-    // ── Shop / Perk ───────────────────────────────────────────────────────────
 
     buyShopItem(item) {
-      const char = useCharacterStore()
-      if (char.spendEnergy(item.cost)) {
-        char.applyShopItem(item)
-        useSoundStore().buy()
-        this.addLog(`Bought: ${item.name}`, 'shop')
-        return true
+      if (this.gold < item.cost) return
+      const sound = useSoundStore()
+      this.gold -= item.cost
+      this._applyShopItem(item)
+      sound.buy?.()
+      this._log(`Bought ${item.name}`, 'shop')
+    },
+
+    _applyShopItem(item) {
+      if (item.effect === 'heal') {
+        this.playerHp = Math.min(this.playerMaxHp, this.playerHp + item.value)
+      } else if (item.effect === 'full_heal') {
+        this.playerHp = this.playerMaxHp
+      } else if (item.effect === 'max_hp') {
+        this.playerMaxHp += item.value
+        this.playerHp = Math.min(this.playerMaxHp, this.playerHp + item.value)
+      } else if (item.effect === 'atk_bonus') {
+        this._atkBonus += item.value
+      } else if (item.effect === 'add_card') {
+        for (let i = 0; i < (item.count ?? 1); i++) {
+          this.playerDeck.unshift(item.cardId ?? 'void_drone')
+        }
       }
-      return false
     },
 
     pickPerk(perk) {
-      const char = useCharacterStore()
-      char.applyPerk(perk)
-      useSoundStore().perk()
-      this.addLog(`Perk acquired: ${perk.name}`, 'perk')
-      char.advanceLevel()
+      const sound = useSoundStore()
+      this.equippedPerkIds.push(perk.id)
+      this._applyPerk(perk)
+      sound.perk?.()
+      this._log(`Perk: ${perk.name}`, 'perk')
+      this.level++
       this.startLevel()
     },
 
-    // ── Reset ─────────────────────────────────────────────────────────────────
+    _applyPerk(perk) {
+      if (perk.effect === 'atk') this._atkBonus += perk.value
+      else if (perk.effect === 'defense') this._defenseBonus += perk.value
+      else if (perk.effect === 'crit') this._critChance = Math.min(1, this._critChance + perk.value)
+      else if (perk.effect === 'max_hp') {
+        this.playerMaxHp += perk.value
+        this.playerHp = Math.min(this.playerMaxHp, this.playerHp + perk.value)
+      } else if (perk.effect === 'lifesteal') this._lifesteal = true
+      else if (perk.effect === 'heal') this.playerHp = Math.min(this.playerMaxHp, this.playerHp + perk.value)
+      else if (perk.effect === 'combo_tank') {
+        this.playerMaxHp += perk.max_hp ?? 0
+        this.playerHp = Math.min(this.playerMaxHp, this.playerHp + (perk.max_hp ?? 0))
+        this._defenseBonus += perk.defense ?? 0
+      } else if (perk.effect === 'combo_dmg') {
+        this._atkBonus += perk.atk ?? 0
+        this._critChance = Math.min(1, this._critChance + (perk.crit ?? 0))
+      } else if (perk.effect === 'combo_cannon') {
+        this._atkBonus += perk.atk ?? 0
+        const penalty = perk.hp_penalty ?? 0
+        this.playerMaxHp = Math.max(1, this.playerMaxHp - penalty)
+        this.playerHp = Math.min(this.playerMaxHp, this.playerHp)
+      }
+    },
+
+    // ── Navigation ───────────────────────────────────────────────────────────
+
+    goToMetaShop() {
+      const sound = useSoundStore()
+      sound.stopMusic?.()
+      this.phase = 'meta-shop'
+    },
 
     restartRun() {
-      useSoundStore().stopMusic()
-      const char = useCharacterStore()
-      char.resetForRun()
-      this.encounterSizes = []
-      this.currentEncounterIdx = 0
-      this.totalEnemyCount = 0
-      this.enemiesDefeated = 0
-      this.enemies = []
-      this.phase = 'gun-select'
-      this.bossSpawned = false
-      this.targetedEnemyId = null
-      this.currentTurn = 'player'
-      this.powerStrikeCooldownTurns = 0
-      this.combatLog = []
-      this.shopOffers = []
-      this.perkOffers = []
+      const sound = useSoundStore()
+      sound.stopMusic?.()
+      this.phase = 'start-run'
+    },
+
+    backFromMetaShop() {
+      this.phase = 'start-run'
+    },
+
+    exitMetaShop() {
+      this.phase = 'start-run'
     },
   },
 })

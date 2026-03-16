@@ -3,10 +3,9 @@ import { onMounted, onUnmounted } from 'vue'
 import { useGameStore } from './stores/game.js'
 import { useCombatStore } from './stores/combat.js'
 import { useSoundStore } from './stores/sound.js'
-import GunSelectScreen from './components/GunSelectScreen.vue'
-import GameArena from './components/arena/GameArena.vue'
-import HeroStats from './components/HeroStats.vue'
-import WaveInfo from './components/WaveInfo.vue'
+import StartRunScreen from './components/StartRunScreen.vue'
+import CardArena from './components/arena/CardArena.vue'
+import LevelInfo from './components/LevelInfo.vue'
 import CombatLog from './components/CombatLog.vue'
 import BetweenLevelScreen from './components/BetweenLevelScreen.vue'
 import GameOverScreen from './components/GameOverScreen.vue'
@@ -62,27 +61,23 @@ onUnmounted(() => {
       </div>
     </header>
 
-    <!-- GUN SELECT -->
-    <template v-if="combat.phase === 'gun-select'">
-      <GunSelectScreen />
+    <!-- START RUN -->
+    <template v-if="combat.phase === 'start-run'">
+      <StartRunScreen />
     </template>
 
-    <!-- COMBAT / BOSS -->
-    <template v-else-if="combat.phase === 'combat' || combat.phase === 'boss'">
+    <!-- COMBAT -->
+    <template v-else-if="combat.phase === 'combat'">
       <main
         class="flex-1 flex gap-0 max-w-6xl mx-auto w-full px-2 py-3"
         style="height: calc(100vh - 52px)"
       >
-        <aside class="w-48 shrink-0 flex flex-col gap-3 pr-3 border-r border-white/[0.07]">
-          <HeroStats />
-        </aside>
-
-        <section class="flex-1 px-3">
-          <GameArena />
+        <section class="flex-1 px-3 overflow-hidden">
+          <CardArena />
         </section>
 
         <aside class="w-48 shrink-0 flex flex-col gap-3 pl-3 border-l border-white/[0.07]">
-          <WaveInfo />
+          <LevelInfo />
           <CombatLog />
         </aside>
       </main>
@@ -98,7 +93,7 @@ onUnmounted(() => {
       <GameOverScreen />
     </template>
 
-    <!-- META SHOP (accessible from game-over and gun-select) -->
+    <!-- META SHOP -->
     <template v-else-if="combat.phase === 'meta-shop'">
       <MetaShop />
     </template>
