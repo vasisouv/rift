@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { useCharacterStore } from './character'
 import { useMetaStore } from './meta'
+import { useSoundStore } from './sound'
 import { getEnemyTypesForLevel } from '../data/enemyTypes'
 import { getBossForLevel } from '../data/bossTypes'
 import { getRandomPerks } from '../data/perks'
@@ -37,6 +38,7 @@ function createEnemy(type, level) {
     color: type.color,
     x: 0,
     y: 0,
+    taunt: type.taunt ?? false,
     isBoss: false,
     isDead: false,
     hitFlash: false,
@@ -143,6 +145,10 @@ export const useCombatStore = defineStore('combat', {
     isPowerReady(state) {
       return state.powerStrikeCooldownTurns === 0
     },
+
+    tauntTarget(state) {
+      return state.enemies.find(e => !e.isDead && e.taunt) ?? null
+    },
   },
 
   actions: {
@@ -211,6 +217,7 @@ export const useCombatStore = defineStore('combat', {
       this.phase = 'boss'
       this.targetedEnemyId = boss.id
       this.currentTurn = 'player'
+      useSoundStore().bossSpawn()
       this.addLog(`⚠️ BOSS: ${bossType.name}!`, 'boss')
     },
 
@@ -232,15 +239,19 @@ export const useCombatStore = defineStore('combat', {
     playerAttack() {
       if (this.currentTurn !== 'player') return
       if (this.phase !== 'combat' && this.phase !== 'boss') return
-      const target = this.currentTarget
-      if (!target) return
+      if (!this.currentTarget) return
+
+      const taunt = this.tauntTarget
+      const target = taunt ?? this.currentTarget
+      if (taunt && taunt.id !== this.currentTarget?.id)
+        this.addLog(`🛡 Sentinel intercepts!`, 'info')
 
       this.currentTurn = 'enemy'
       this._performAttack(target)
 
       const char = useCharacterStore()
       if (char.doubleShot) {
-        const t2 = this.currentTarget
+        const t2 = taunt ?? this.currentTarget
         if (t2) this._performAttack(t2)
       }
 
@@ -255,12 +266,16 @@ export const useCombatStore = defineStore('combat', {
       const meta = useMetaStore()
       this.powerStrikeCooldownTurns = meta.powerStrikeCooldown
       this.currentTurn = 'enemy'
+      useSoundStore().power()
 
       const char = useCharacterStore()
       const gun = char.selectedGun
+      const taunt = this.tauntTarget
       const targets = gun.special === 'pellet_spread'
         ? [...this.activeEnemies]
-        : (this.currentTarget ? [this.currentTarget] : [])
+        : (taunt ? [taunt] : (this.currentTarget ? [this.currentTarget] : []))
+      if (taunt && gun.special !== 'pellet_spread' && taunt.id !== this.currentTarget?.id)
+        this.addLog(`🛡 Sentinel intercepts the power strike!`, 'info')
 
       for (const target of targets) {
         if (target.isDead) continue
@@ -287,6 +302,7 @@ export const useCombatStore = defineStore('combat', {
       const char = useCharacterStore()
       char.isGuarding = true
       this.currentTurn = 'enemy'
+      useSoundStore().guard()
       this.addLog('🛡 Guard! Bracing for impact...', 'info')
       this._doEnemyTurn()
     },
@@ -311,6 +327,10 @@ export const useCombatStore = defineStore('combat', {
         target.hp = Math.max(0, target.hp - actualDmg)
         target.hitFlash = true
         setTimeout(() => { if (target) target.hitFlash = false }, 250)
+
+        const sound = useSoundStore()
+        if (isCrit) sound.crit()
+        else sound.attack()
 
         const critText = isCrit ? ' CRIT!' : ''
         if (gun.pellets > 1) {
@@ -341,6 +361,7 @@ export const useCombatStore = defineStore('combat', {
       char.gainEnergy(enemy.energyReward)
       this.enemiesDefeated++
       if (this.targetedEnemyId === enemy.id) this.targetedEnemyId = null
+      useSoundStore().enemyDeath()
       this.addLog(`${enemy.name} defeated! +${Math.round(enemy.energyReward * char.energyMultiplier)} ⚡`, 'kill')
     },
 
@@ -383,12 +404,15 @@ export const useCombatStore = defineStore('combat', {
         const burnDmg = Math.round(enemy.maxHp * 0.08)
         enemy.hp = Math.max(0, enemy.hp - burnDmg)
         enemy.burnTurns--
+        useSoundStore().burn()
         this.addLog(`🔥 ${enemy.name} burns for -${burnDmg}!`, 'burn')
         if (enemy.hp <= 0) {
           enemy.isDead = true
           this._onEnemyDeath(enemy)
         }
       }
+
+      if (this._checkClear()) return
 
       // Enemy attacks
       for (const enemy of this.enemies) {
@@ -404,6 +428,7 @@ export const useCombatStore = defineStore('combat', {
           let atkDmg = enemy.atk
           if (enemy.nextAction === 'charge') atkDmg = Math.round(atkDmg * 2)
           const dmg = char.takeDamage(atkDmg)
+          useSoundStore().enemyHit()
           this.addLog(`${enemy.name}: -${dmg} HP`, 'damage')
           if (char.hp <= 0) {
             // Assign next actions before returning so we don't get stale state
@@ -432,6 +457,8 @@ export const useCombatStore = defineStore('combat', {
 
     _onBossKill() {
       const char = useCharacterStore()
+      useSoundStore().stopMusic()
+      useSoundStore().bossDeath()
       this.addLog(`🏆 Boss defeated! Level ${char.level} cleared!`, 'level')
       this.phase = 'between-level'
       // Show 4 randomly picked shop items each time
@@ -451,6 +478,8 @@ export const useCombatStore = defineStore('combat', {
       meta.save()
 
       this.phase = 'game-over'
+      useSoundStore().stopMusic()
+      useSoundStore().playerDeath()
       this.addLog(`💀 Fell at level ${char.level}. +${shards} shards`, 'death')
     },
 
@@ -470,6 +499,7 @@ export const useCombatStore = defineStore('combat', {
       const char = useCharacterStore()
       if (char.spendEnergy(item.cost)) {
         char.applyShopItem(item)
+        useSoundStore().buy()
         this.addLog(`Bought: ${item.name}`, 'shop')
         return true
       }
@@ -479,6 +509,7 @@ export const useCombatStore = defineStore('combat', {
     pickPerk(perk) {
       const char = useCharacterStore()
       char.applyPerk(perk)
+      useSoundStore().perk()
       this.addLog(`Perk acquired: ${perk.name}`, 'perk')
       char.advanceLevel()
       this.startLevel()
@@ -487,6 +518,7 @@ export const useCombatStore = defineStore('combat', {
     // ── Reset ─────────────────────────────────────────────────────────────────
 
     restartRun() {
+      useSoundStore().stopMusic()
       const char = useCharacterStore()
       char.resetForRun()
       this.encounterSizes = []

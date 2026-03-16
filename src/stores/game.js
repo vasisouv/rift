@@ -18,9 +18,12 @@ export const useGameStore = defineStore('game', {
       combat.phase = 'gun-select'
     },
 
-    // Wipes the current run and returns to gun select. Meta progress is kept.
+    // Wipes everything — run + meta — back to a fresh first-load state.
     hardReset() {
+      const meta = useMetaStore()
       const combat = useCombatStore()
+      localStorage.removeItem('void_harvest_meta_v1')
+      meta.$reset()
       combat.restartRun()
     },
   },

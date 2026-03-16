@@ -110,7 +110,7 @@ function canAfford(upgrade) {
              hover:border-energy hover:text-energy transition-colors"
       @click="combat.exitMetaShop()"
     >
-      ← Back to Arsenal
+      ← Back to Game
     </button>
 
   </div>

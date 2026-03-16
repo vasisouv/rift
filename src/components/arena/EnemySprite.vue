@@ -38,6 +38,12 @@ const isTargeted = computed(() => combat.targetedEnemyId === props.enemy.id)
       style="box-shadow: 0 0 20px rgba(255,136,0,0.5), 0 0 40px rgba(255,136,0,0.2); border-radius: 50%; width: 52px; height: 52px; top: -4px; left: -4px;"
     />
 
+    <!-- Taunt badge -->
+    <div v-if="enemy.taunt && !enemy.isDead"
+         class="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] font-bold text-emerald-400 tracking-wider whitespace-nowrap">
+      🛡 TAUNTING
+    </div>
+
     <!-- Target indicator -->
     <div
       v-if="isTargeted"

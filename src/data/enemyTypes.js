@@ -58,6 +58,7 @@ export const ENEMY_TYPES = [
     color: '#44ff88',
     speed: 3,
     tier: 5,
+    taunt: true,
   },
   {
     id: 'ravager',

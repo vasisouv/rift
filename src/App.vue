@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted } from 'vue'
 import { useGameStore } from './stores/game.js'
 import { useCombatStore } from './stores/combat.js'
+import { useSoundStore } from './stores/sound.js'
 import GunSelectScreen from './components/GunSelectScreen.vue'
 import GameArena from './components/arena/GameArena.vue'
 import HeroStats from './components/HeroStats.vue'
@@ -13,6 +14,7 @@ import MetaShop from './components/MetaShop.vue'
 
 const game = useGameStore()
 const combat = useCombatStore()
+const sound = useSoundStore()
 
 let saveInterval = null
 
@@ -45,10 +47,16 @@ onUnmounted(() => {
             Save
           </button>
           <button
+            class="px-3 py-1 text-xs border border-white/10 text-dim rounded hover:border-energy hover:text-energy transition-colors"
+            @click="sound.muted = !sound.muted"
+          >
+            {{ sound.muted ? 'Unmute' : 'Mute' }}
+          </button>
+          <button
             class="px-3 py-1 text-xs border border-white/10 text-dim rounded hover:border-red-500 hover:text-red-400 transition-colors"
             @click="game.hardReset()"
           >
-            Restart
+            Reset
           </button>
         </div>
       </div>

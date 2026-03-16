@@ -53,7 +53,7 @@ const combat = useCombatStore()
           :class="enemy.isDead ? 'opacity-30' : ''"
         >
           <div class="flex justify-between">
-            <span :style="{ color: enemy.color }" class="font-semibold">{{ enemy.emoji }} {{ enemy.name }}</span>
+            <span :style="{ color: enemy.color }" class="font-semibold">{{ enemy.emoji }} {{ enemy.name }}<span v-if="enemy.taunt && !enemy.isDead" class="text-emerald-400 ml-1">🛡</span></span>
             <span class="font-mono text-dim">{{ enemy.hp }}</span>
           </div>
           <div class="w-full h-1 bg-white/10 rounded-full overflow-hidden">
