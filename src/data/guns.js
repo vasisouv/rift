@@ -1,0 +1,32 @@
+export const GUNS = [
+  {
+    id: 'smg',
+    name: 'SMG',
+    damage: 8,
+    pellets: 2,
+    special: 'low_hp_crit',
+    description: 'Rapid burst — 2 shots per action. Crits when below 30% HP.',
+    icon: '🔫',
+    playstyle: 'High crit · Burst',
+  },
+  {
+    id: 'automatic',
+    name: 'Automatic',
+    damage: 18,
+    pellets: 1,
+    special: null,
+    description: 'Reliable single shot. No frills, no surprises.',
+    icon: '⚙️',
+    playstyle: 'Reliable · Steady',
+  },
+  {
+    id: 'shotgun',
+    name: 'Shotgun',
+    damage: 12,
+    pellets: 3,
+    special: 'pellet_spread',
+    description: 'Fires 3 pellets per action. Power Strike hits all enemies.',
+    icon: '💥',
+    playstyle: 'Burst · AoE Power',
+  },
+]
