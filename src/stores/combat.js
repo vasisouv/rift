@@ -43,6 +43,8 @@ function pickRandom(arr, n) {
 export const useCombatStore = defineStore('combat', {
   state: () => ({
     phase: 'start-run',
+    victoryAnimating: false,
+    attackAnimation: null, // { attackerId, targetId, id }
     level: 1,
     currentTurn: 'player',
 
@@ -228,6 +230,9 @@ export const useCombatStore = defineStore('combat', {
       const attacker = this.playerBoard.find(c => c.instanceId === this.attackingCardId)
       if (!attacker) { this.attackingCardId = null; return }
 
+      // Trigger travel animation before resolving damage
+      this.attackAnimation = { attackerId: this.attackingCardId, targetId, id: Date.now() }
+
       const sound = useSoundStore()
 
       if (targetId === 'enemy-hero') {
@@ -366,6 +371,7 @@ export const useCombatStore = defineStore('combat', {
           const dmg = Math.max(0, attacker.atk - this._defenseBonus)
           this._log(`Enemy ${attacker.name} attacks you for ${dmg}`, 'damage')
           sound.enemyHit?.()
+          this.attackAnimation = { attackerId: attacker.instanceId, targetId: 'player-hero', id: Date.now() }
           this._animateAttack(attacker)
           this.playerHp = Math.max(0, this.playerHp - dmg)
           attacker.hasAttackedThisTurn = true
@@ -384,6 +390,7 @@ export const useCombatStore = defineStore('combat', {
       const atkDmg = attacker.atk
       const defDmg = defender.atk
 
+      this.attackAnimation = { attackerId: attacker.instanceId, targetId: defender.instanceId, id: Date.now() }
       this._animateAttack(attacker)
       defender.hp -= atkDmg
       attacker.hp -= defDmg
@@ -431,7 +438,11 @@ export const useCombatStore = defineStore('combat', {
         this.gold += goldEarned
         this._log(`Enemy defeated! +${goldEarned} gold`, 'level')
         this._generateOffers()
-        this.phase = 'between-level'
+        this.victoryAnimating = true
+        setTimeout(() => {
+          this.victoryAnimating = false
+          this.phase = 'between-level'
+        }, 2800)
       }
     },
 

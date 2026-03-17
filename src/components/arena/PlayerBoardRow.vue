@@ -6,6 +6,15 @@ import BoardCard from '../BoardCard.vue'
 const combat = useCombatStore()
 const dragOver = ref(false)
 
+function startAttackDrag(attackerId) {
+  combat.attackingCardId = attackerId
+}
+
+function onAttackDragEnd() {
+  // attackTarget already clears this on success; clear it here on cancelled drags
+  combat.attackingCardId = null
+}
+
 const playerHpPct = () => Math.max(0, (combat.playerHp / combat.playerMaxHp) * 100)
 
 function canAttack(card) {
@@ -53,6 +62,8 @@ function onDrop(e) {
         :can-attack="canAttack(card)"
         :is-enemy="false"
         @click="combat.selectBoardCard(card.instanceId)"
+        @drag-attack-start="startAttackDrag"
+        @drag-attack-end="onAttackDragEnd"
       />
       <div v-if="combat.playerBoard.length === 0" key="empty" class="text-[10px] italic">
         <span v-if="dragOver" class="text-energy font-bold">Drop to deploy</span>
@@ -62,7 +73,7 @@ function onDrop(e) {
     </TransitionGroup>
 
     <!-- Player hero — pinned to bottom -->
-    <div class="mt-auto flex flex-col items-center gap-1 px-4 py-2 select-none" @click.stop>
+    <div data-player-hero class="mt-auto flex flex-col items-center gap-1 px-4 py-2 select-none" @click.stop>
       <div class="text-5xl leading-none">🧙</div>
       <div class="text-[10px] font-bold text-energy tracking-wide">You</div>
       <div class="w-20 h-1.5 rounded-full bg-white/10 overflow-hidden">

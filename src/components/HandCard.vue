@@ -33,22 +33,25 @@ function onDragStart(e) {
   >
     <!-- Mana cost gem -->
     <div
-      class="absolute -top-2.5 -right-2.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-extrabold border"
-      :class="affordable ? 'bg-blue-500/80 border-blue-300 text-white' : 'bg-gray-700 border-gray-500 text-gray-400'"
+      class="absolute -top-3.5 -left-3.5 w-9 h-9 rounded-full flex items-center justify-center text-lg font-extrabold border-2 shadow-lg z-10"
+      :class="affordable
+        ? 'bg-blue-600 border-blue-300 text-white'
+        : 'bg-slate-700 border-slate-500 text-slate-400'"
+      style="text-shadow: 0 1px 4px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.7); box-shadow: 0 2px 10px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.25);"
     >
       {{ card.manaCost }}
     </div>
 
     <!-- Emoji -->
-    <div class="text-4xl leading-none mt-1">{{ card.emoji }}</div>
+    <div class="text-4xl leading-none mt-1" draggable="false">{{ card.emoji }}</div>
 
     <!-- Name -->
-    <div class="text-[11px] text-center text-slate-300 font-semibold leading-tight w-full">
+    <div class="text-[11px] text-center text-slate-300 font-semibold leading-tight w-full" draggable="false">
       {{ card.name }}
     </div>
 
     <!-- ATK / HP stats -->
-    <div class="flex items-center justify-between w-full px-0.5 mt-0.5">
+    <div class="flex items-center justify-between w-full px-0.5 mt-0.5" draggable="false">
       <span class="text-sm font-bold text-yellow-400">⚔{{ card.atk }}</span>
       <span class="text-sm font-bold text-hp">♥{{ card.hp }}</span>
     </div>

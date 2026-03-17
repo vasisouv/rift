@@ -31,7 +31,7 @@ function onHeroDrop(e) {
   heroDropOver.value = false
   const attackerId = e.dataTransfer.getData('attackerId')
   if (!attackerId) return
-  combat.selectBoardCard(attackerId)
+  combat.attackingCardId = attackerId
   combat.attackTarget('enemy-hero')
 }
 
@@ -52,7 +52,7 @@ function onCardDrop(e, cardId) {
   cardDropOver.value = null
   const attackerId = e.dataTransfer.getData('attackerId')
   if (!attackerId) return
-  combat.selectBoardCard(attackerId)
+  combat.attackingCardId = attackerId
   combat.attackTarget(cardId)
 }
 
@@ -64,8 +64,25 @@ function handleCardClick(cardId) {
 <template>
   <div class="flex flex-col items-center gap-2">
 
+    <!-- Enemy mana -->
+    <div class="flex items-center gap-3 w-full px-1">
+      <span class="text-xs font-bold text-purple-400 uppercase tracking-widest shrink-0">Enemy Mana</span>
+      <div class="flex gap-1 flex-1">
+        <div
+          v-for="i in combat.enemyManaMax"
+          :key="i"
+          class="flex-1 h-3 rounded-sm transition-all duration-200"
+          :class="i <= combat.enemyMana ? 'bg-purple-500' : 'bg-white/10'"
+        />
+      </div>
+      <span class="text-base font-extrabold font-mono text-purple-300 shrink-0">
+        {{ combat.enemyMana }}<span class="text-sm text-dim">/{{ combat.enemyManaMax }}</span>
+      </span>
+    </div>
+
     <!-- Enemy hero (drop target) -->
     <div
+      data-enemy-hero
       class="flex flex-col items-center gap-1 px-4 py-2 rounded-xl border transition-all duration-150 select-none"
       :class="heroDropOver
         ? 'border-hp bg-hp/20 ring-2 ring-hp/60 scale-105'

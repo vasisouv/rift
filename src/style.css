@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Prevent browser default drag on everything; only elements with draggable="true" opt back in */
+*:not([draggable="true"]) {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
 @layer base {
   body {
     @apply bg-void text-slate-200 font-sans min-h-screen;
@@ -59,6 +65,23 @@
 
 .pulse-glow {
   animation: pulseGlow 1.5s ease-in-out infinite;
+}
+
+@keyframes readyGlow {
+  0%, 100% { box-shadow: 0 0 5px 1px rgba(0, 255, 255, 0.35), 0 0 10px 2px rgba(0, 255, 255, 0.12); border-color: rgba(0, 255, 255, 0.35); }
+  50%       { box-shadow: 0 0 12px 3px rgba(0, 255, 255, 0.65), 0 0 24px 6px rgba(0, 255, 255, 0.25); border-color: rgba(0, 255, 255, 0.65); }
+}
+
+.card-ready-attack {
+  animation: readyGlow 1.4s ease-in-out infinite;
+}
+
+/* Victory overlay exit */
+.victory-out-leave-active {
+  transition: opacity 0.5s ease-in;
+}
+.victory-out-leave-to {
+  opacity: 0;
 }
 
 /* Card deployment enter animation */

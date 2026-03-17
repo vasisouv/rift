@@ -20,11 +20,19 @@ const combat = useCombatStore()
       </span>
     </div>
 
-    <!-- Mana display -->
-    <div class="flex items-center gap-1.5">
-      <span class="text-[11px] text-dim">Mana:</span>
-      <span class="text-sm font-extrabold font-mono text-blue-400">
-        {{ combat.playerMana }}<span class="text-dim text-xs">/{{ combat.playerManaMax }}</span>
+    <!-- Player mana -->
+    <div class="flex items-center gap-2 flex-1 mx-4">
+      <span class="text-sm font-bold text-blue-400 uppercase tracking-widest shrink-0">Mana</span>
+      <div class="flex gap-1 flex-1">
+        <div
+          v-for="i in combat.playerManaMax"
+          :key="i"
+          class="flex-1 h-4 rounded-sm transition-all duration-200"
+          :class="i <= combat.playerMana ? 'bg-blue-500' : 'bg-white/10'"
+        />
+      </div>
+      <span class="text-lg font-extrabold font-mono text-blue-300 shrink-0">
+        {{ combat.playerMana }}<span class="text-sm text-dim">/{{ combat.playerManaMax }}</span>
       </span>
     </div>
 

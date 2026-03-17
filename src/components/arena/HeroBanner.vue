@@ -4,48 +4,56 @@ const combat = useCombatStore()
 </script>
 
 <template>
-  <div class="flex items-center justify-between gap-3 px-3 py-1.5 bg-surface/80 border border-white/[0.08] rounded-xl text-[11px]">
+  <div class="flex items-center justify-between gap-4 px-4 py-3 bg-surface/90 border border-white/[0.08] rounded-xl">
 
     <!-- Player mana -->
-    <div class="flex items-center gap-1.5">
-      <span class="text-dim uppercase tracking-wide">Mana</span>
-      <div class="flex gap-0.5">
-        <span
+    <div class="flex flex-col gap-1.5 flex-1">
+      <div class="flex items-center justify-between">
+        <span class="text-[11px] font-bold text-blue-400 uppercase tracking-widest">Mana</span>
+        <span class="text-sm font-mono font-bold text-blue-300">
+          {{ combat.playerMana }}<span class="text-xs text-dim">/{{ combat.playerManaMax }}</span>
+        </span>
+      </div>
+      <div class="flex gap-0.5 h-2.5">
+        <div
           v-for="i in combat.playerManaMax"
           :key="i"
-          class="w-3 h-3 rounded-full border border-blue-400/60 transition-colors duration-150"
+          class="flex-1 rounded-sm transition-all duration-200"
           :class="i <= combat.playerMana ? 'bg-blue-500' : 'bg-white/10'"
         />
       </div>
-      <span class="font-mono font-bold text-blue-400">{{ combat.playerMana }}/{{ combat.playerManaMax }}</span>
     </div>
 
     <!-- Turn indicator -->
-    <div class="flex items-center gap-1.5">
+    <div class="flex flex-col items-center gap-1 px-4 shrink-0">
       <div
-        class="w-1.5 h-1.5 rounded-full"
-        :class="combat.currentTurn === 'player' ? 'bg-energy animate-pulse' : 'bg-hp animate-pulse'"
-      />
-      <span
-        class="font-bold uppercase tracking-widest"
+        class="text-xs font-extrabold uppercase tracking-[0.2em] transition-colors duration-300 whitespace-nowrap"
         :class="combat.currentTurn === 'player' ? 'text-energy' : 'text-hp'"
       >
         {{ combat.currentTurn === 'player' ? 'Your Turn' : 'Enemy…' }}
-      </span>
+      </div>
+      <div
+        class="w-1.5 h-1.5 rounded-full animate-pulse"
+        :class="combat.currentTurn === 'player' ? 'bg-energy' : 'bg-hp'"
+      />
     </div>
 
     <!-- Enemy mana -->
-    <div class="flex items-center gap-1.5 flex-row-reverse">
-      <span class="text-dim uppercase tracking-wide">Mana</span>
-      <div class="flex gap-0.5 flex-row-reverse">
-        <span
+    <div class="flex flex-col gap-1.5 flex-1 items-end">
+      <div class="flex items-center justify-between w-full">
+        <span class="text-sm font-mono font-bold text-purple-300">
+          {{ combat.enemyMana }}<span class="text-xs text-dim">/{{ combat.enemyManaMax }}</span>
+        </span>
+        <span class="text-[11px] font-bold text-purple-400 uppercase tracking-widest">Mana</span>
+      </div>
+      <div class="flex gap-0.5 h-2.5 w-full">
+        <div
           v-for="i in combat.enemyManaMax"
           :key="i"
-          class="w-3 h-3 rounded-full border border-purple-400/60 transition-colors duration-150"
+          class="flex-1 rounded-sm transition-all duration-200"
           :class="i <= combat.enemyMana ? 'bg-purple-500' : 'bg-white/10'"
         />
       </div>
-      <span class="font-mono font-bold text-purple-400">{{ combat.enemyMana }}/{{ combat.enemyManaMax }}</span>
     </div>
 
   </div>

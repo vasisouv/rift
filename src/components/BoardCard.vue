@@ -7,7 +7,7 @@ const props = defineProps({
   isAttackTarget: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['click', 'drag-attack-start'])
+const emit = defineEmits(['click', 'drag-attack-start', 'drag-attack-end'])
 
 const hpPct = () => Math.max(0, (props.card.hp / props.card.maxHp) * 100)
 
@@ -16,55 +16,55 @@ function onDragStart(e) {
   e.dataTransfer.setData('attackerId', props.card.instanceId)
   emit('drag-attack-start', props.card.instanceId)
 }
+
+function onDragEnd() {
+  emit('drag-attack-end')
+}
 </script>
 
 <template>
   <div
     class="relative flex flex-col items-center gap-1 px-2 py-2 rounded-lg border
            select-none w-[96px] min-w-[96px]"
+    :data-instance-id="card.instanceId"
     :class="[
       canAttack && !isEnemy ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
-      card.attacking ? (isEnemy ? 'anim-lunge-down' : 'anim-lunge-up') : 'transition-all duration-100',
+      'transition-all duration-100',
       card.hitFlash ? 'brightness-200' : '',
       selected ? 'border-energy ring-1 ring-energy/60 bg-energy/10' : '',
       isAttackTarget ? 'border-hp ring-1 ring-hp/60 bg-hp/10 animate-pulse' : '',
-      canAttack && !selected && !isAttackTarget && !card.hasSummoningSickness && !card.hasAttackedThisTurn
-        ? 'border-white/30 hover:border-energy/60 bg-surface'
+      canAttack && !selected && !isAttackTarget
+        ? 'card-ready-attack bg-energy/5'
         : '',
       (card.hasSummoningSickness || card.hasAttackedThisTurn) && !isEnemy
-        ? 'opacity-50 border-white/10 bg-surface cursor-default'
+        ? 'border-white/10 bg-surface cursor-default'
         : '',
       isEnemy && !isAttackTarget ? 'border-hp/30 bg-hp/5 hover:border-hp/60' : '',
-      !canAttack && !isEnemy && !isAttackTarget && !card.hasSummoningSickness && !card.hasAttackedThisTurn
+      !canAttack && !isEnemy && !isAttackTarget
         ? 'border-white/20 bg-surface'
         : '',
     ]"
     :draggable="canAttack && !isEnemy"
     @click.stop="emit('click', card.instanceId)"
     @dragstart="onDragStart"
+    @dragend="onDragEnd"
   >
-    <!-- Sickness overlay -->
-    <div
-      v-if="card.hasSummoningSickness && !isEnemy"
-      class="absolute inset-0 rounded-lg bg-black/50 pointer-events-none z-10"
-    />
-
     <!-- Emoji -->
-    <div class="text-4xl leading-none">{{ card.emoji }}</div>
+    <div class="text-4xl leading-none" draggable="false">{{ card.emoji }}</div>
 
     <!-- Name -->
-    <div class="text-[11px] text-center text-slate-300 font-semibold leading-tight w-full truncate text-center">
+    <div class="text-[11px] text-center text-slate-300 font-semibold leading-tight w-full truncate text-center" draggable="false">
       {{ card.name }}
     </div>
 
     <!-- Stats: ATK / HP -->
-    <div class="flex items-center justify-between w-full mt-0.5 px-0.5">
+    <div class="flex items-center justify-between w-full mt-0.5 px-0.5" draggable="false">
       <span class="text-sm font-bold text-yellow-400">⚔{{ card.atk }}</span>
       <span class="text-sm font-bold text-hp">♥{{ card.hp }}</span>
     </div>
 
     <!-- HP bar -->
-    <div class="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+    <div class="w-full h-1.5 rounded-full bg-white/10 overflow-hidden" draggable="false">
       <div
         class="h-full rounded-full transition-all duration-300"
         :style="{ width: hpPct() + '%', backgroundColor: card.color }"
@@ -73,22 +73,3 @@ function onDragStart(e) {
   </div>
 </template>
 
-<style scoped>
-.anim-lunge-up {
-  animation: lunge-up 0.4s ease-out forwards;
-}
-.anim-lunge-down {
-  animation: lunge-down 0.4s ease-out forwards;
-}
-
-@keyframes lunge-up {
-  0%   { transform: translateY(0)     scale(1);    }
-  35%  { transform: translateY(-28px) scale(1.12); }
-  100% { transform: translateY(0)     scale(1);    }
-}
-@keyframes lunge-down {
-  0%   { transform: translateY(0)    scale(1);    }
-  35%  { transform: translateY(28px) scale(1.12); }
-  100% { transform: translateY(0)    scale(1);    }
-}
-</style>

@@ -5,6 +5,7 @@ const combat = useCombatStore()
 
 const typeColors = {
   hit:    'text-slate-300',
+  crit:   'text-yellow-300',
   kill:   'text-xp',
   damage: 'text-hp',
   level:  'text-energy',
@@ -19,20 +20,24 @@ const typeColors = {
 </script>
 
 <template>
-  <div class="flex flex-col gap-1 p-2 bg-surface/40 rounded-lg border border-white/[0.05]">
-    <div class="text-[9px] text-dim uppercase tracking-widest mb-1">Combat Log</div>
-    <TransitionGroup name="log" tag="div" class="flex flex-col gap-0.5 overflow-hidden">
-      <div
-        v-for="entry in combat.combatLog"
-        :key="entry.id"
-        class="text-[10px] font-mono leading-tight truncate transition-all duration-200"
-        :class="typeColors[entry.type] ?? 'text-dim'"
-      >
-        {{ entry.message }}
+  <div class="flex flex-col min-h-0 h-full p-3 bg-surface/40 rounded-xl border border-white/[0.05]">
+    <div class="text-[11px] font-bold text-dim/80 uppercase tracking-widest mb-2 shrink-0">
+      Combat Log
+    </div>
+    <div class="flex-1 overflow-y-auto flex flex-col-reverse min-h-0">
+      <TransitionGroup name="log" tag="div" class="flex flex-col gap-1.5">
+        <div
+          v-for="entry in combat.combatLog"
+          :key="entry.id"
+          class="text-xs font-mono leading-snug"
+          :class="typeColors[entry.type] ?? 'text-dim'"
+        >
+          {{ entry.message }}
+        </div>
+      </TransitionGroup>
+      <div v-if="combat.combatLog.length === 0" class="text-xs text-dim italic">
+        No events yet.
       </div>
-    </TransitionGroup>
-    <div v-if="combat.combatLog.length === 0" class="text-[10px] text-dim italic">
-      No events yet.
     </div>
   </div>
 </template>

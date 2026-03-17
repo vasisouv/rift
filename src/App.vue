@@ -76,9 +76,9 @@ onUnmounted(() => {
           <CardArena />
         </section>
 
-        <aside class="w-48 shrink-0 flex flex-col gap-3 pl-3 border-l border-white/[0.07]">
+        <aside class="w-64 shrink-0 flex flex-col gap-3 pl-3 border-l border-white/[0.07]">
           <LevelInfo />
-          <CombatLog />
+          <CombatLog class="flex-1 min-h-0" />
         </aside>
       </main>
     </template>
