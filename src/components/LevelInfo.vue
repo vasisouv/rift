@@ -1,13 +1,33 @@
 <script setup>
+import { computed } from 'vue'
 import { useCombatStore } from '../stores/combat.js'
+import { getRift } from '../data/rifts.js'
 const combat = useCombatStore()
+const rift = computed(() => combat.currentRiftId ? getRift(combat.currentRiftId) : null)
 </script>
 
 <template>
   <div class="flex flex-col gap-2.5">
 
-    <!-- Level badge -->
-    <div class="relative flex flex-col items-center py-3 bg-surface border border-energy/20 rounded-xl overflow-hidden">
+    <!-- Level / Rift badge -->
+    <div v-if="rift" class="relative flex flex-col items-center py-3 bg-surface border rounded-xl overflow-hidden"
+         :style="{ borderColor: rift.color + '33' }">
+      <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent to-transparent opacity-70"
+           :style="{ viaColor: rift.color }" />
+      <div class="text-[10px] font-bold uppercase tracking-[0.25em] mb-0.5" :style="{ color: rift.color + '99' }">
+        {{ rift.emoji }} {{ rift.name }}
+      </div>
+      <div class="text-3xl font-extrabold leading-none" :style="{ color: rift.color }">
+        {{ combat.battleIndex + 1 }}<span class="text-lg text-dim">/{{ rift.battles + 1 }}</span>
+      </div>
+      <div v-if="combat.isBossFight" class="text-[9px] text-hp font-bold mt-1 animate-pulse uppercase tracking-wider">
+        Boss Fight
+      </div>
+      <div v-if="combat.bossPassiveDesc" class="text-[9px] text-gold mt-1 text-center px-2">
+        {{ combat.bossPassiveDesc }}
+      </div>
+    </div>
+    <div v-else class="relative flex flex-col items-center py-3 bg-surface border border-energy/20 rounded-xl overflow-hidden">
       <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-energy to-transparent opacity-70" />
       <div class="text-[11px] font-bold text-energy/50 uppercase tracking-[0.35em]">Level</div>
       <div class="text-5xl font-extrabold text-energy glow-energy leading-none mt-0.5">{{ combat.level }}</div>

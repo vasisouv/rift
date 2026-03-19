@@ -99,6 +99,10 @@ function handleCardClick(cardId) {
     >
       <div class="text-5xl leading-none">{{ combat.enemyEmoji }}</div>
       <div class="text-[10px] font-bold text-hp tracking-wide">{{ combat.enemyName }}</div>
+      <div v-if="combat.isBossFight && combat.bossPassiveDesc"
+           class="text-[8px] text-gold/80 max-w-24 text-center leading-tight">
+        {{ combat.bossPassiveDesc }}
+      </div>
       <div class="w-20 h-1.5 rounded-full bg-white/10 overflow-hidden">
         <div
           class="h-full rounded-full transition-all duration-300"

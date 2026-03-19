@@ -1085,6 +1085,36 @@ export function getStartingDeck() {
   ]
 }
 
+// Build enemy deck from a specific tier range (for campaign rifts)
+export function buildRiftEnemyDeck([minTier, maxTier]) {
+  const available = CARD_DEFS.filter(c => c.tier >= minTier && c.tier <= maxTier && c.type !== 'spell')
+
+  const deck = []
+  for (let i = 0; i < 30; i++) {
+    const roll = Math.random()
+    let targetTier
+    if (roll < 0.4) targetTier = minTier
+    else if (roll < 0.65) targetTier = Math.min(minTier + 1, maxTier)
+    else if (roll < 0.82) targetTier = Math.min(minTier + 2, maxTier)
+    else if (roll < 0.92) targetTier = Math.min(minTier + 3, maxTier)
+    else targetTier = maxTier
+
+    const pool = available.filter(c => c.tier === targetTier)
+    if (pool.length > 0) {
+      deck.push(pool[Math.floor(Math.random() * pool.length)].id)
+    } else {
+      deck.push(available[Math.floor(Math.random() * available.length)].id)
+    }
+  }
+
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[deck[i], deck[j]] = [deck[j], deck[i]]
+  }
+
+  return deck
+}
+
 // Enemy deck scales with level — higher levels unlock higher tier cards
 export function buildEnemyDeck(level) {
   const maxTier = Math.min(10, Math.ceil(level / 2) + 1)

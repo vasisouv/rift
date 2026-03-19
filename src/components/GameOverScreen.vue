@@ -1,9 +1,12 @@
 <script setup>
+import { computed } from 'vue'
 import { useCombatStore } from '../stores/combat.js'
 import { useMetaStore } from '../stores/meta.js'
+import { getRift } from '../data/rifts.js'
 
 const combat = useCombatStore()
 const meta = useMetaStore()
+const rift = computed(() => combat.currentRiftId ? getRift(combat.currentRiftId) : null)
 </script>
 
 <template>
@@ -15,7 +18,10 @@ const meta = useMetaStore()
       <h2 class="text-4xl font-extrabold tracking-[0.3em] text-hp glow-hp uppercase mb-1">
         You Died
       </h2>
-      <p class="text-dim text-sm">The void claims another warrior.</p>
+      <p v-if="rift" class="text-dim text-sm">
+        {{ rift.emoji }} {{ rift.name }} — Battle {{ combat.battleIndex + 1 }} of {{ rift.battles + 1 }}
+      </p>
+      <p v-else class="text-dim text-sm">The void claims another warrior.</p>
     </div>
 
     <!-- Shard reward (prominent) -->
@@ -35,7 +41,11 @@ const meta = useMetaStore()
     <div class="flex flex-col gap-2 p-4 bg-surface border border-white/10 rounded-xl min-w-52">
       <div class="text-[10px] text-dim uppercase tracking-widest text-center mb-1">Run Summary</div>
 
-      <div class="flex justify-between items-center text-sm">
+      <div v-if="rift" class="flex justify-between items-center text-sm">
+        <span class="text-dim">Battle Reached</span>
+        <span class="text-energy font-bold glow-energy-sm">{{ combat.battleIndex + 1 }} / {{ rift.battles + 1 }}</span>
+      </div>
+      <div v-else class="flex justify-between items-center text-sm">
         <span class="text-dim">Level Reached</span>
         <span class="text-energy font-bold glow-energy-sm">{{ combat.level }}</span>
       </div>
@@ -79,9 +89,19 @@ const meta = useMetaStore()
                text-energy font-bold text-lg tracking-widest uppercase
                hover:bg-energy/20 hover:scale-105 active:scale-95 transition-all duration-150
                glow-energy-sm"
-        @click="combat.restartRun()"
+        @click="combat.restartRift()"
       >
         Try Again
+      </button>
+
+      <button
+        v-if="rift"
+        class="px-6 py-3 bg-surface border-2 border-white/20 rounded-xl
+               text-dim font-bold text-sm tracking-widest uppercase
+               hover:bg-white/5 hover:scale-105 active:scale-95 transition-all duration-150"
+        @click="combat.restartRun()"
+      >
+        Back to Hub
       </button>
     </div>
 

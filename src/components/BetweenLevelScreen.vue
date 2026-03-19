@@ -1,9 +1,14 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useCombatStore } from '../stores/combat.js'
+import { getRift } from '../data/rifts.js'
 
 const combat = useCombatStore()
 const selectedPerk = ref(null)
+const rift = computed(() => combat.currentRiftId ? getRift(combat.currentRiftId) : null)
+const battleNum = computed(() => combat.battleIndex + 1)
+const totalBattles = computed(() => rift.value ? rift.value.battles + 1 : null)
+const bossNext = computed(() => rift.value && combat.battleIndex + 1 >= rift.value.battles)
 
 function selectPerk(perk) {
   selectedPerk.value = perk
@@ -21,10 +26,16 @@ function advance() {
 
     <!-- Header -->
     <div class="text-center">
-      <div class="text-xs text-xp uppercase tracking-[0.3em] mb-1">Level {{ combat.level }} cleared!</div>
+      <div v-if="rift" class="text-xs text-xp uppercase tracking-[0.3em] mb-1">
+        {{ rift.emoji }} {{ rift.name }} — Battle {{ battleNum }} of {{ totalBattles }} cleared!
+      </div>
+      <div v-else class="text-xs text-xp uppercase tracking-[0.3em] mb-1">Level {{ combat.level }} cleared!</div>
       <h2 class="text-xl font-extrabold text-energy glow-energy tracking-widest uppercase">
         Upgrade your deck
       </h2>
+      <div v-if="bossNext" class="mt-2 text-sm font-bold text-hp animate-pulse">
+        ⚠ Boss fight next!
+      </div>
     </div>
 
     <!-- Two-column layout -->

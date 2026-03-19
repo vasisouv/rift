@@ -9,6 +9,7 @@ import LevelInfo from './components/LevelInfo.vue'
 import CombatLog from './components/CombatLog.vue'
 import BetweenLevelScreen from './components/BetweenLevelScreen.vue'
 import GameOverScreen from './components/GameOverScreen.vue'
+import RiftClearedScreen from './components/RiftClearedScreen.vue'
 import MetaShop from './components/MetaShop.vue'
 import DeckBuilder from './components/DeckBuilder.vue'
 
@@ -92,6 +93,11 @@ onUnmounted(() => {
     <!-- GAME OVER -->
     <template v-else-if="combat.phase === 'game-over'">
       <GameOverScreen />
+    </template>
+
+    <!-- RIFT CLEARED -->
+    <template v-else-if="combat.phase === 'rift-cleared'">
+      <RiftClearedScreen />
     </template>
 
     <!-- META SHOP -->

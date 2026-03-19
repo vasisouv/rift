@@ -15,6 +15,12 @@ export const useMetaStore = defineStore('meta', {
     collection: {},      // { [cardId]: count }
     customDeck: null,    // array of card IDs or null (uses default)
     totalPacksOpened: 0,
+
+    // Campaign progress
+    campaignProgress: {
+      highestUnlockedRift: 0,
+      completedRifts: [],
+    },
   }),
 
   getters: {
@@ -66,6 +72,14 @@ export const useMetaStore = defineStore('meta', {
     deckLabel(state) {
       if (!state.customDeck) return 'Default (30)'
       return `Custom (${state.customDeck.length})`
+    },
+
+    isRiftUnlocked: (state) => (index) => index <= state.campaignProgress.highestUnlockedRift,
+
+    isRiftCompleted: (state) => (id) => state.campaignProgress.completedRifts.includes(id),
+
+    allRiftsCompleted(state) {
+      return state.campaignProgress.completedRifts.length >= 6
     },
   },
 
@@ -119,6 +133,18 @@ export const useMetaStore = defineStore('meta', {
       this.save()
     },
 
+    markRiftCompleted(id) {
+      if (!this.campaignProgress.completedRifts.includes(id)) {
+        this.campaignProgress.completedRifts = [...this.campaignProgress.completedRifts, id]
+      }
+    },
+
+    unlockNextRift() {
+      if (this.campaignProgress.highestUnlockedRift < 5) {
+        this.campaignProgress.highestUnlockedRift++
+      }
+    },
+
     buyUpgrade(upgradeId) {
       const upgrade = META_UPGRADES.find(u => u.id === upgradeId)
       if (!upgrade) return false
@@ -160,6 +186,10 @@ export const useMetaStore = defineStore('meta', {
         collection: { ...this.collection },
         customDeck: this.customDeck ? [...this.customDeck] : null,
         totalPacksOpened: this.totalPacksOpened,
+        campaignProgress: {
+          highestUnlockedRift: this.campaignProgress.highestUnlockedRift,
+          completedRifts: [...this.campaignProgress.completedRifts],
+        },
       }))
     },
 
@@ -177,6 +207,10 @@ export const useMetaStore = defineStore('meta', {
             this.collection = data.collection ?? {}
             this.customDeck = data.customDeck ?? null
             this.totalPacksOpened = data.totalPacksOpened ?? 0
+            this.campaignProgress = {
+              highestUnlockedRift: data.campaignProgress?.highestUnlockedRift ?? 0,
+              completedRifts: data.campaignProgress?.completedRifts ?? [],
+            }
             if (Object.keys(this.collection).length === 0) this.seedStarterCollection()
             return
           }

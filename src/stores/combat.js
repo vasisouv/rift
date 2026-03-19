@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
-import { getCardDef, getStartingDeck, buildEnemyDeck } from '../data/cards.js'
+import { getCardDef, getStartingDeck, buildEnemyDeck, buildRiftEnemyDeck } from '../data/cards.js'
+import { getRift } from '../data/rifts.js'
 import { SHOP_ITEMS } from '../data/shopItems.js'
 import { PERKS } from '../data/perks.js'
 import { useMetaStore } from './meta.js'
@@ -88,6 +89,14 @@ export const useCombatStore = defineStore('combat', {
     pendingSpellId: null,
     spellTargetMode: null, // 'enemy_card' | 'friendly_card' | null
 
+    // Rift / campaign state
+    currentRiftId: null,
+    battleIndex: 0,
+    isBossFight: false,
+    bossPassive: null,
+    bossPassiveDesc: null,
+    bossPassiveCounter: 0,
+
     // Run tracking
     gold: 0,
     cardsDestroyed: 0,
@@ -117,7 +126,7 @@ export const useCombatStore = defineStore('combat', {
 
     // ── Run lifecycle ────────────────────────────────────────────────────────
 
-    startRun() {
+    startRun(riftId = null) {
       const meta = useMetaStore()
       const bonuses = meta.startingBonuses
 
@@ -134,6 +143,14 @@ export const useCombatStore = defineStore('combat', {
       this._lifesteal = (bonuses.lifestealChance ?? 0) > 0
       this._extraStartCard = (bonuses.extraStartCards ?? 0) > 0
       this._extraTier2Card = (bonuses.extraTier2Card ?? false)
+
+      // Campaign rift state
+      this.currentRiftId = riftId
+      this.battleIndex = 0
+      this.isBossFight = false
+      this.bossPassive = null
+      this.bossPassiveDesc = null
+      this.bossPassiveCounter = 0
 
       if (bonuses.startingPerk) {
         const perk = PERKS[Math.floor(Math.random() * PERKS.length)]
@@ -152,7 +169,48 @@ export const useCombatStore = defineStore('combat', {
       if (this._extraTier2Card) startDeck = [...startDeck, 'specter']
       this.playerDeck = shuffle(startDeck)
 
-      this.enemyDeck = buildEnemyDeck(this.level)
+      const rift = this.currentRiftId ? getRift(this.currentRiftId) : null
+
+      if (rift) {
+        // Campaign mode — rift-aware setup
+        const isBoss = this.battleIndex >= rift.battles
+        this.isBossFight = isBoss
+
+        if (isBoss) {
+          this.enemyDeck = buildRiftEnemyDeck(rift.boss.tierRange)
+          this.enemyName = rift.boss.name
+          this.enemyEmoji = rift.boss.emoji
+          this.enemyHp = rift.boss.hp
+          this.enemyMaxHp = rift.boss.hp
+          this.bossPassive = rift.boss.passive
+          this.bossPassiveDesc = rift.boss.passiveDesc
+          this.bossPassiveCounter = 0
+          this._log(`⚠ BOSS: ${rift.boss.name} — ${rift.boss.passiveDesc}`, 'boss')
+        } else {
+          this.enemyDeck = buildRiftEnemyDeck(rift.tierRange)
+          const enemy = rift.enemies[this.battleIndex % rift.enemies.length]
+          this.enemyName = enemy.name
+          this.enemyEmoji = enemy.emoji
+          this.enemyHp = rift.baseEnemyHp + rift.hpPerBattle * this.battleIndex
+          this.enemyMaxHp = this.enemyHp
+          this.bossPassive = null
+          this.bossPassiveDesc = null
+          this.bossPassiveCounter = 0
+        }
+      } else {
+        // Endless mode (legacy)
+        this.enemyDeck = buildEnemyDeck(this.level)
+        const enemies = ['👾', '👻', '🌀', '☄️', '💀', '🌌', '👑']
+        const names = ['Void Wraith', 'Specter Lord', 'Rift Walker', 'Stellar Horror', 'Void Lich', 'Nebula Titan', 'Void Sovereign']
+        const idx = (this.level - 1) % enemies.length
+        this.enemyEmoji = enemies[idx]
+        this.enemyName = names[idx]
+        this.enemyHp = 50
+        this.enemyMaxHp = 50
+        this.isBossFight = false
+        this.bossPassive = null
+        this.bossPassiveDesc = null
+      }
 
       this.playerHand = []
       this.playerBoard = []
@@ -163,14 +221,6 @@ export const useCombatStore = defineStore('combat', {
       this.playerManaMax = 1
       this.enemyMana = 1
       this.enemyManaMax = 1
-
-      const enemies = ['👾', '👻', '🌀', '☄️', '💀', '🌌', '👑']
-      const names = ['Void Wraith', 'Specter Lord', 'Rift Walker', 'Stellar Horror', 'Void Lich', 'Nebula Titan', 'Void Sovereign']
-      const idx = (this.level - 1) % enemies.length
-      this.enemyEmoji = enemies[idx]
-      this.enemyName = names[idx]
-      this.enemyHp = 50
-      this.enemyMaxHp = 50
 
       this.drawCard('player')
       this.drawCard('player')
@@ -189,7 +239,13 @@ export const useCombatStore = defineStore('combat', {
       this.phase = 'combat'
 
       sound.startMusic?.(false)
-      this._log(`Level ${this.level} — fight!`, 'level')
+      if (rift) {
+        const battleNum = this.battleIndex + 1
+        const totalBattles = rift.battles + 1
+        this._log(`${rift.name} — Battle ${battleNum}/${totalBattles}`, 'level')
+      } else {
+        this._log(`Level ${this.level} — fight!`, 'level')
+      }
     },
 
     // ── Card draw ────────────────────────────────────────────────────────────
@@ -346,6 +402,11 @@ export const useCombatStore = defineStore('combat', {
       const sound = useSoundStore()
       if (card.owner === 'player') {
         this.playerBoard = this.playerBoard.filter(c => c.instanceId !== card.instanceId)
+        // Boss passive: heal_on_kill
+        if (this.bossPassive === 'heal_on_kill') {
+          this.enemyHp = Math.min(this.enemyMaxHp, this.enemyHp + 5)
+          this._log(`${this.enemyName} heals 5 HP (passive)`, 'boss')
+        }
       } else {
         this.enemyBoard = this.enemyBoard.filter(c => c.instanceId !== card.instanceId)
         this.cardsDestroyed++
@@ -576,12 +637,77 @@ export const useCombatStore = defineStore('combat', {
       this._doEnemyTurn()
     },
 
+    _applyBossPassive() {
+      if (!this.bossPassive) return
+      this.bossPassiveCounter++
+
+      switch (this.bossPassive) {
+        case 'spawn_drone': {
+          if (this.enemyBoard.length < 5) {
+            const drone = makeInstance('void_drone', 'enemy')
+            if (drone) {
+              drone.atk = 1
+              drone.hp = 1
+              drone.maxHp = 1
+              drone.hasSummoningSickness = true
+              this.enemyBoard.push(drone)
+              this._log(`${this.enemyName} spawns a 1/1 drone`, 'boss')
+            }
+          }
+          break
+        }
+        case 'ramping_atk': {
+          for (const card of this.enemyBoard) {
+            card.atk += 1
+          }
+          if (this.enemyBoard.length > 0) {
+            this._log(`${this.enemyName}: all cards gain +1 ATK`, 'boss')
+          }
+          break
+        }
+        case 'aoe_pulse': {
+          if (this.bossPassiveCounter % 2 === 0) {
+            const targets = [...this.playerBoard]
+            for (const card of targets) {
+              card.hp -= 1
+              this._flashCard(card)
+            }
+            if (targets.length > 0) {
+              this._log(`${this.enemyName}: 1 dmg to all your cards`, 'boss')
+              for (const card of targets) this._checkCardDeath(card)
+            }
+          }
+          break
+        }
+        case 'escalate': {
+          if (this.bossPassiveCounter % 3 === 0) {
+            const n = Math.floor(this.bossPassiveCounter / 3)
+            const targets = [...this.playerBoard]
+            for (const card of targets) {
+              card.hp -= n
+              this._flashCard(card)
+            }
+            this.playerHp = Math.max(0, this.playerHp - n)
+            this.enemyHp = Math.min(this.enemyMaxHp, this.enemyHp + n)
+            this._log(`${this.enemyName}: deals ${n} to all + heals ${n}`, 'boss')
+            for (const card of targets) this._checkCardDeath(card)
+            this._checkPlayerDeath()
+          }
+          break
+        }
+      }
+    },
+
     async _doEnemyTurn() {
       const sound = useSoundStore()
       const delay = (ms) => new Promise(r => setTimeout(r, ms))
 
       this.enemyManaMax = Math.min(10, this.enemyManaMax + 1)
       this.enemyMana = this.enemyManaMax
+
+      // Boss passive triggers at start of enemy turn
+      this._applyBossPassive()
+      if (this.phase !== 'combat') return
 
       await delay(700)
       this.drawCard('enemy')
@@ -605,6 +731,13 @@ export const useCombatStore = defineStore('combat', {
             card.hasSummoningSickness = true
             card.hasAttackedThisTurn = false
             this.enemyBoard.push(card)
+            // Boss passive: buff_on_play
+            if (this.bossPassive === 'buff_on_play') {
+              card.atk += 1
+              card.hp += 1
+              card.maxHp += 1
+              this._log(`${card.name} gets +1/+1 (boss passive)`, 'boss')
+            }
             sound.cardPlay?.()
             this._log(`Enemy plays ${card.name}`, 'info')
           }
@@ -690,15 +823,37 @@ export const useCombatStore = defineStore('combat', {
         const sound = useSoundStore()
         sound.bossDeath?.()
         sound.stopMusic?.()
-        const goldEarned = 10 + this.level * 5
-        this.gold += goldEarned
-        this._log(`Enemy defeated! +${goldEarned} gold`, 'level')
-        this._generateOffers()
-        this.victoryAnimating = true
-        setTimeout(() => {
-          this.victoryAnimating = false
-          this.phase = 'between-level'
-        }, 2800)
+
+        const rift = this.currentRiftId ? getRift(this.currentRiftId) : null
+
+        if (rift && this.isBossFight) {
+          // Boss defeated — rift cleared!
+          const meta = useMetaStore()
+          const shards = rift.completionShards
+          meta.markRiftCompleted(rift.id)
+          meta.unlockNextRift()
+          meta.earnShards(shards)
+          meta.recordRun()
+          meta.save()
+          this.lastRunShards = shards
+          this._log(`${rift.boss.name} defeated! Rift cleared!`, 'boss')
+          this.victoryAnimating = true
+          setTimeout(() => {
+            this.victoryAnimating = false
+            this.phase = 'rift-cleared'
+          }, 2800)
+        } else {
+          // Normal battle victory
+          const goldEarned = rift ? rift.goldPerBattle : 10 + this.level * 5
+          this.gold += goldEarned
+          this._log(`Enemy defeated! +${goldEarned} gold`, 'level')
+          this._generateOffers()
+          this.victoryAnimating = true
+          setTimeout(() => {
+            this.victoryAnimating = false
+            this.phase = 'between-level'
+          }, 2800)
+        }
       }
     },
 
@@ -708,7 +863,15 @@ export const useCombatStore = defineStore('combat', {
         const sound = useSoundStore()
         sound.playerDeath?.()
         sound.stopMusic?.()
-        const shards = this.level * 15 + this.cardsDestroyed * 3 + (this.level - 1) * 25
+
+        let shards
+        const rift = this.currentRiftId ? getRift(this.currentRiftId) : null
+        if (rift) {
+          shards = (this.battleIndex + 1) * 15 * (rift.index + 1) + this.cardsDestroyed * 3
+        } else {
+          shards = this.level * 15 + this.cardsDestroyed * 3 + (this.level - 1) * 25
+        }
+
         this.lastRunShards = shards
         meta.earnShards(shards)
         meta.recordRun()
@@ -758,7 +921,11 @@ export const useCombatStore = defineStore('combat', {
       this._applyPerk(perk)
       sound.perk?.()
       this._log(`Perk: ${perk.name}`, 'perk')
-      this.level++
+      if (this.currentRiftId) {
+        this.battleIndex++
+      } else {
+        this.level++
+      }
       this.startLevel()
     },
 
@@ -802,6 +969,14 @@ export const useCombatStore = defineStore('combat', {
       const sound = useSoundStore()
       sound.stopMusic?.()
       this.phase = 'start-run'
+    },
+
+    restartRift() {
+      if (this.currentRiftId) {
+        this.startRun(this.currentRiftId)
+      } else {
+        this.startRun()
+      }
     },
 
     backFromMetaShop() {

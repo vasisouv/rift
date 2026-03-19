@@ -1,15 +1,27 @@
 <script setup>
 import { useCombatStore } from '../stores/combat.js'
 import { useMetaStore } from '../stores/meta.js'
+import { RIFTS } from '../data/rifts.js'
 
 const combat = useCombatStore()
 const meta = useMetaStore()
 
 const b = () => meta.startingBonuses
+
+function riftStatus(rift) {
+  if (meta.isRiftCompleted(rift.id)) return 'completed'
+  if (meta.isRiftUnlocked(rift.index)) return 'available'
+  return 'locked'
+}
+
+function selectRift(rift) {
+  if (riftStatus(rift) === 'locked') return
+  combat.startRun(rift.id)
+}
 </script>
 
 <template>
-  <div class="flex flex-col items-center justify-center flex-1 gap-6 px-4 py-8">
+  <div class="flex flex-col items-center justify-center flex-1 gap-5 px-4 py-6">
 
     <!-- Title -->
     <div class="text-center">
@@ -17,7 +29,7 @@ const b = () => meta.startingBonuses
       <h2 class="text-3xl font-extrabold tracking-[0.3em] text-energy glow-energy uppercase mb-1">
         Rift
       </h2>
-      <p class="text-dim text-sm">A card combat roguelike. Reduce the enemy hero to 0 HP.</p>
+      <p class="text-dim text-sm">Choose a rift to enter. Conquer all 6 to complete the campaign.</p>
     </div>
 
     <!-- Shard balance + navigation -->
@@ -46,6 +58,45 @@ const b = () => meta.startingBonuses
       <span>Deck: <span class="text-white/70 font-mono">{{ meta.deckLabel }}</span></span>
       <span>·</span>
       <span>Collection: <span class="text-white/70 font-mono">{{ meta.collectionSize }}</span> unique cards</span>
+    </div>
+
+    <!-- Rift selection grid -->
+    <div class="grid grid-cols-3 gap-3 max-w-xl w-full">
+      <div
+        v-for="rift in RIFTS"
+        :key="rift.id"
+        class="relative flex flex-col items-center gap-1.5 p-4 rounded-xl border-2 transition-all duration-150"
+        :class="{
+          'bg-energy/5 border-energy/60 cursor-pointer hover:bg-energy/10 hover:scale-[1.03] active:scale-95':
+            riftStatus(rift) === 'available',
+          'bg-surface border-energy/30 cursor-pointer hover:bg-energy/5 hover:scale-[1.02] active:scale-95 opacity-80':
+            riftStatus(rift) === 'completed',
+          'bg-surface/30 border-white/[0.06] opacity-35 cursor-not-allowed':
+            riftStatus(rift) === 'locked',
+        }"
+        @click="selectRift(rift)"
+      >
+        <!-- Status badge -->
+        <div v-if="riftStatus(rift) === 'completed'"
+             class="absolute top-1.5 right-1.5 text-energy text-sm">✓</div>
+        <div v-if="riftStatus(rift) === 'locked'"
+             class="absolute top-1.5 right-1.5 text-dim text-xs">🔒</div>
+
+        <!-- Glow ring for available -->
+        <div v-if="riftStatus(rift) === 'available'"
+             class="absolute inset-0 rounded-xl ring-1 ring-energy/40 animate-pulse pointer-events-none" />
+
+        <div class="text-2xl">{{ rift.emoji }}</div>
+        <div class="text-xs font-bold tracking-wider" :style="{ color: rift.color }">
+          {{ rift.name }}
+        </div>
+        <div class="text-[9px] text-dim">
+          Boss: {{ rift.boss.name }}
+        </div>
+        <div class="text-[9px] text-dim/60">
+          {{ rift.battles + 1 }} battles
+        </div>
+      </div>
     </div>
 
     <!-- Active meta bonuses -->
@@ -77,7 +128,7 @@ const b = () => meta.startingBonuses
       </span>
     </div>
 
-    <!-- How to play -->
+    <!-- How to play (collapsed) -->
     <div class="max-w-md p-4 bg-surface border border-white/[0.08] rounded-xl text-[11px] text-dim leading-relaxed">
       <div class="font-bold text-slate-300 mb-2 text-xs">How to play</div>
       <ul class="list-disc list-inside space-y-1">
@@ -88,16 +139,6 @@ const b = () => meta.startingBonuses
         <li>Mana increases by 1 each turn (max 10)</li>
       </ul>
     </div>
-
-    <!-- Start button -->
-    <button
-      class="px-14 py-4 bg-energy/10 border-2 border-energy rounded-xl text-energy font-extrabold text-xl
-             tracking-widest uppercase hover:bg-energy/20 hover:scale-105 active:scale-95 transition-all
-             duration-150 glow-energy-sm"
-      @click="combat.startRun()"
-    >
-      Start Run →
-    </button>
 
   </div>
 </template>
