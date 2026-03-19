@@ -1,5 +1,6 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
+import { computePosition, flip, shift, offset } from '@floating-ui/dom'
 import { useMetaStore } from '../stores/meta.js'
 import { useCombatStore } from '../stores/combat.js'
 import { useSoundStore } from '../stores/sound.js'
@@ -17,8 +18,11 @@ const MAX_COPIES = 4
 const deck = ref(meta.customDeck ? [...meta.customDeck] : [...getStartingDeck()])
 
 const sortBy = ref('cost') // 'cost' or 'tier'
+const hoveredCard = ref(null)
+const tooltipRef = ref(null)
+const tooltipStyle = ref({ left: '0px', top: '0px' })
 
-// Collection with in-deck counts
+// Collection — only cards with available copies to add
 const collectionCards = computed(() => {
   const entries = Object.entries(meta.collection)
     .map(([id, count]) => {
@@ -27,7 +31,7 @@ const collectionCards = computed(() => {
       const inDeck = deck.value.filter(d => d === id).length
       return { ...def, owned: count, inDeck, available: count - inDeck }
     })
-    .filter(Boolean)
+    .filter(c => c && c.available > 0)
 
   if (sortBy.value === 'tier') {
     entries.sort((a, b) => a.tier - b.tier || a.manaCost - b.manaCost)
@@ -99,6 +103,22 @@ function useDefault() {
 function back() {
   combat.phase = 'start-run'
 }
+
+async function showCard(card, e) {
+  hoveredCard.value = card
+  await nextTick()
+  const el = tooltipRef.value
+  if (!el) return
+  const { x, y } = await computePosition(e.currentTarget, el, {
+    placement: 'right-start',
+    middleware: [offset(12), flip(), shift({ padding: 8 })],
+  })
+  tooltipStyle.value = { left: `${x}px`, top: `${y}px` }
+}
+
+function hideCard() {
+  hoveredCard.value = null
+}
 </script>
 
 <template>
@@ -117,11 +137,12 @@ function back() {
 
     <div class="flex gap-4 flex-1 min-h-0">
 
-      <!-- Left: Collection -->
+      <!-- Left: Collection (only cards with available copies) -->
       <div class="flex-1 flex flex-col min-h-0">
         <div class="flex items-center justify-between mb-2">
           <div class="text-[10px] font-bold text-dim uppercase tracking-widest">
             Collection
+            <span class="text-white/30 ml-1">({{ collectionCards.length }} available)</span>
           </div>
           <div class="flex gap-1">
             <button
@@ -145,14 +166,12 @@ function back() {
           <div
             v-for="card in collectionCards"
             :key="card.id"
-            class="p-3 rounded-xl border transition-all duration-150 select-none"
-            :class="[
-              card.available > 0
-                ? 'cursor-pointer hover:scale-105 hover:border-energy/60 bg-surface'
-                : 'opacity-35 cursor-not-allowed',
-            ]"
-            :style="{ borderColor: card.available > 0 ? getTierColor(card.tier) + '40' : 'rgba(255,255,255,0.05)' }"
-            @click="card.available > 0 && addCard(card.id)"
+            class="p-3 rounded-xl border cursor-pointer transition-all duration-150 select-none
+                   hover:scale-105 hover:border-energy/60 bg-surface"
+            :style="{ borderColor: getTierColor(card.tier) + '40' }"
+            @click="addCard(card.id)"
+            @mouseenter="showCard(card, $event)"
+            @mouseleave="hideCard"
           >
             <div class="text-3xl text-center mb-1">{{ card.emoji }}</div>
             <div class="text-[11px] font-bold text-white text-center truncate leading-tight">{{ card.name }}</div>
@@ -164,15 +183,19 @@ function back() {
               {{ getTierLabel(card.tier) }}
             </div>
             <div class="text-[10px] text-center text-energy/60 font-mono">{{ card.manaCost }} mana</div>
-            <div class="text-[10px] text-center mt-0.5" :class="card.inDeck > 0 ? 'text-xp' : 'text-dim'">
-              {{ card.inDeck }}/{{ Math.min(card.owned, MAX_COPIES) }} in deck
+            <div class="text-[10px] text-center mt-0.5 text-dim">
+              {{ card.available }} left
             </div>
+          </div>
+
+          <div v-if="collectionCards.length === 0" class="col-span-full text-xs text-dim text-center py-8">
+            All cards are in your deck!
           </div>
         </div>
       </div>
 
       <!-- Right: Deck Panel -->
-      <div class="w-60 shrink-0 flex flex-col min-h-0 pl-4 border-l border-white/[0.08]">
+      <div class="w-64 shrink-0 flex flex-col min-h-0 pl-4 border-l border-white/[0.08]">
 
         <div class="flex items-center justify-between mb-2">
           <div class="text-[10px] font-bold text-dim uppercase tracking-widest">Your Deck</div>
@@ -206,6 +229,8 @@ function back() {
             class="flex items-center gap-1.5 px-2 py-1 rounded bg-surface/80 border border-white/[0.06]
                    hover:border-hp/30 cursor-pointer transition-colors group"
             @click="removeCard(card.id)"
+            @mouseenter="showCard(card, $event)"
+            @mouseleave="hideCard"
           >
             <span class="text-energy/60 text-[10px] font-mono w-3 text-right shrink-0">{{ card.manaCost }}</span>
             <span class="text-sm shrink-0">{{ card.emoji }}</span>
@@ -253,5 +278,32 @@ function back() {
       </div>
     </div>
 
+  </div>
+
+  <!-- Floating card tooltip -->
+  <div
+    v-if="hoveredCard"
+    ref="tooltipRef"
+    class="fixed z-50 w-48 p-3 rounded-xl border-2 bg-void/95 backdrop-blur-sm pointer-events-none"
+    :style="{
+      ...tooltipStyle,
+      borderColor: getTierColor(hoveredCard.tier),
+      boxShadow: `0 0 20px ${getTierColor(hoveredCard.tier)}30`,
+    }"
+  >
+    <div class="text-4xl text-center mb-1">{{ hoveredCard.emoji }}</div>
+    <div class="text-sm font-bold text-white text-center">{{ hoveredCard.name }}</div>
+    <div class="flex justify-center gap-3 text-sm mt-1.5">
+      <span class="text-gold font-mono font-bold">{{ hoveredCard.baseAtk }} ⚔</span>
+      <span class="text-hp font-mono font-bold">{{ hoveredCard.baseHp }} ♥</span>
+      <span class="text-energy font-mono font-bold">{{ hoveredCard.manaCost }} 💧</span>
+    </div>
+    <div class="text-[10px] font-bold text-center mt-1.5" :style="{ color: getTierColor(hoveredCard.tier) }">
+      {{ getTierLabel(hoveredCard.tier) }} · Tier {{ hoveredCard.tier }}
+    </div>
+    <div class="text-[10px] text-dim text-center mt-1 leading-relaxed">{{ hoveredCard.description }}</div>
+    <div class="text-[9px] text-dim text-center mt-1">
+      Owned: {{ meta.collection[hoveredCard.id] ?? 0 }}
+    </div>
   </div>
 </template>
