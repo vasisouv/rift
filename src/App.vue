@@ -31,7 +31,7 @@ onUnmounted(() => {
 <template>
   <div class="starfield fixed inset-0 pointer-events-none z-0" />
 
-  <div class="relative z-10 flex flex-col min-h-screen">
+  <div class="relative z-10 flex flex-col min-h-screen select-none">
 
     <!-- Header -->
     <header class="sticky top-0 z-20 bg-surface/90 backdrop-blur border-b border-white/[0.08]">
@@ -70,14 +70,14 @@ onUnmounted(() => {
     <!-- COMBAT -->
     <template v-else-if="combat.phase === 'combat'">
       <main
-        class="flex-1 flex gap-0 max-w-6xl mx-auto w-full px-2 py-3"
+        class="flex gap-0 max-w-6xl mx-auto w-full px-2 py-3 overflow-hidden"
         style="height: calc(100vh - 52px)"
       >
         <section class="flex-1 px-3 overflow-hidden">
           <CardArena />
         </section>
 
-        <aside class="w-64 shrink-0 flex flex-col gap-3 pl-3 border-l border-white/[0.07]">
+        <aside class="w-64 shrink-0 flex flex-col gap-3 pl-3 border-l border-white/[0.07] min-h-0 overflow-hidden">
           <LevelInfo />
           <CombatLog class="flex-1 min-h-0" />
         </aside>

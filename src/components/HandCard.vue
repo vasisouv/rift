@@ -1,4 +1,6 @@
 <script setup>
+import { getCardDef } from '../data/cards.js'
+
 const props = defineProps({
   card: { type: Object, required: true },
   selected: { type: Boolean, default: false },
@@ -7,8 +9,11 @@ const props = defineProps({
 
 const emit = defineEmits(['click', 'drag-start'])
 
+const isSpell = props.card.type === 'spell'
+const spellDef = isSpell ? getCardDef(props.card.defId) : null
+
 function onDragStart(e) {
-  if (!props.affordable) { e.preventDefault(); return }
+  if (!props.affordable || isSpell) { e.preventDefault(); return }
   e.dataTransfer.effectAllowed = 'move'
   e.dataTransfer.setData('cardId', props.card.instanceId)
   emit('drag-start', props.card.instanceId)
@@ -20,14 +25,18 @@ function onDragStart(e) {
     class="relative flex flex-col items-center gap-1 px-2.5 py-2.5 rounded-xl border
            select-none transition-all duration-100 w-[100px] min-w-[100px] shrink-0"
     :class="[
-      affordable ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed',
+      affordable ? 'cursor-pointer' : 'cursor-not-allowed',
       selected
-        ? 'border-energy ring-2 ring-energy/50 bg-energy/10 -translate-y-3 scale-105'
+        ? isSpell
+          ? 'border-rate ring-2 ring-rate/50 bg-rate/10 -translate-y-3 scale-105'
+          : 'border-energy ring-2 ring-energy/50 bg-energy/10 -translate-y-3 scale-105'
         : affordable
-          ? 'border-white/20 bg-surface hover:border-energy/50 hover:-translate-y-1'
+          ? isSpell
+            ? 'border-rate/30 bg-rate/5 hover:border-rate/50 hover:-translate-y-1'
+            : 'border-white/20 bg-surface hover:border-energy/50 hover:-translate-y-1'
           : 'border-white/10 bg-surface/50 opacity-40',
     ]"
-    :draggable="affordable"
+    :draggable="affordable && !isSpell"
     @click="affordable && emit('click', card.instanceId)"
     @dragstart="onDragStart"
   >
@@ -35,11 +44,16 @@ function onDragStart(e) {
     <div
       class="absolute -top-3.5 -left-3.5 w-9 h-9 rounded-full flex items-center justify-center text-lg font-extrabold border-2 shadow-lg z-10"
       :class="affordable
-        ? 'bg-blue-600 border-blue-300 text-white'
+        ? isSpell ? 'bg-purple-600 border-purple-300 text-white' : 'bg-blue-600 border-blue-300 text-white'
         : 'bg-slate-700 border-slate-500 text-slate-400'"
       style="text-shadow: 0 1px 4px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.7); box-shadow: 0 2px 10px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.25);"
     >
       {{ card.manaCost }}
+    </div>
+
+    <!-- Spell label -->
+    <div v-if="isSpell" class="absolute -top-1 right-1 text-[7px] font-extrabold text-rate uppercase tracking-wider">
+      Spell
     </div>
 
     <!-- Emoji -->
@@ -50,8 +64,13 @@ function onDragStart(e) {
       {{ card.name }}
     </div>
 
-    <!-- ATK / HP stats -->
-    <div class="flex items-center justify-between w-full px-0.5 mt-0.5" draggable="false">
+    <!-- Spell: description -->
+    <div v-if="isSpell && spellDef" class="text-[9px] text-center text-rate/80 leading-tight w-full px-0.5" draggable="false">
+      {{ spellDef.description }}
+    </div>
+
+    <!-- Minion: ATK / HP stats -->
+    <div v-else class="flex items-center justify-between w-full px-0.5 mt-0.5" draggable="false">
       <span class="text-sm font-bold text-yellow-400">⚔{{ card.atk }}</span>
       <span class="text-sm font-bold text-hp">♥{{ card.hp }}</span>
     </div>

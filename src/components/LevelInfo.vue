@@ -22,17 +22,8 @@ const combat = useCombatStore()
           <span class="text-sm font-bold font-mono text-energy">{{ combat.playerDeck.length }}</span>
         </div>
         <div class="flex justify-between items-center">
-          <span class="text-sm text-slate-400">Your hand</span>
-          <span class="text-sm font-bold font-mono text-energy">{{ combat.playerHand.length }}</span>
-        </div>
-        <div class="w-full h-px bg-white/[0.07] my-0.5" />
-        <div class="flex justify-between items-center">
           <span class="text-sm text-slate-400">Enemy deck</span>
           <span class="text-sm font-bold font-mono text-hp">{{ combat.enemyDeck.length }}</span>
-        </div>
-        <div class="flex justify-between items-center">
-          <span class="text-sm text-slate-400">Enemy hand</span>
-          <span class="text-sm font-bold font-mono text-hp">{{ combat.enemyHand.length }}</span>
         </div>
       </div>
     </div>

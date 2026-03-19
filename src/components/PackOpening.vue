@@ -85,7 +85,9 @@ watch(() => props.cards, async (cards) => {
         >
           <div class="text-3xl">{{ card.emoji }}</div>
           <div class="text-[10px] font-bold text-white text-center leading-tight">{{ card.name }}</div>
-          <div class="flex gap-2 text-[10px]">
+          <div v-if="card.type === 'spell'" class="text-[8px] text-rate font-extrabold uppercase tracking-wider">Spell</div>
+          <div v-if="card.type === 'spell'" class="text-[9px] text-center text-white/60 leading-tight px-1">{{ card.description }}</div>
+          <div v-else class="flex gap-2 text-[10px]">
             <span class="text-gold font-mono font-bold">{{ card.baseAtk }} ⚔</span>
             <span class="text-hp font-mono font-bold">{{ card.baseHp }} ♥</span>
           </div>

@@ -43,7 +43,7 @@ export const useMetaStore = defineStore('meta', {
         extraStartCards: (state.purchasedLevels['starting_energy'] ?? 0) > 0 ? 1 : 0,
         atkBonus:        (state.purchasedLevels['damage_boost'] ?? 0),
         defense:         (state.purchasedLevels['defense_boost'] ?? 0) * 2,
-        critChance:      (state.purchasedLevels['crit_boost'] ?? 0) * 0.05,
+        spellDmgBonus:   (state.purchasedLevels['spell_amp'] ?? 0),
         lifestealChance: (state.purchasedLevels['lifesteal'] ?? 0) * 0.05,
         extraTier2Card:  (state.purchasedLevels['power_cooldown'] ?? 0) >= 1,
         startingPerk:    (state.purchasedLevels['starting_perk'] ?? 0) >= 1,

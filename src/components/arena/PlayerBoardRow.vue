@@ -61,6 +61,7 @@ function onDrop(e) {
         :selected="combat.attackingCardId === card.instanceId"
         :can-attack="canAttack(card)"
         :is-enemy="false"
+        :is-spell-target="combat.spellTargetMode === 'friendly_card'"
         @click="combat.selectBoardCard(card.instanceId)"
         @drag-attack-start="startAttackDrag"
         @drag-attack-end="onAttackDragEnd"

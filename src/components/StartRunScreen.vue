@@ -63,8 +63,8 @@ const b = () => meta.startingBonuses
       <span v-if="b().defense > 0" class="text-[10px] px-2 py-0.5 bg-dim/15 border border-dim/30 rounded text-dim">
         -{{ b().defense }} damage taken
       </span>
-      <span v-if="b().critChance > 0" class="text-[10px] px-2 py-0.5 bg-rate/15 border border-rate/30 rounded text-rate">
-        +{{ Math.round(b().critChance * 100) }}% crit chance
+      <span v-if="b().spellDmgBonus > 0" class="text-[10px] px-2 py-0.5 bg-rate/15 border border-rate/30 rounded text-rate">
+        +{{ b().spellDmgBonus }} spell damage
       </span>
       <span v-if="b().lifestealChance > 0" class="text-[10px] px-2 py-0.5 bg-hp/15 border border-hp/30 rounded text-hp">
         🩸 lifesteal

@@ -30,7 +30,11 @@ const combat = useCombatStore()
     </div>
 
     <!-- Instruction hint -->
-    <div v-if="combat.selectedHandCardId" class="text-[10px] text-energy text-center animate-pulse">
+    <div v-if="combat.spellTargetMode" class="text-[10px] text-rate text-center animate-pulse">
+      {{ combat.spellTargetMode === 'enemy_card' ? 'Select an enemy target for your spell' : 'Select a friendly card to buff' }}
+      — click spell again to cancel
+    </div>
+    <div v-else-if="combat.selectedHandCardId" class="text-[10px] text-energy text-center animate-pulse">
       Click your board to deploy — or click a card again to deselect
     </div>
   </div>

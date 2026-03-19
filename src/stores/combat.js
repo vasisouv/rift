@@ -10,11 +10,26 @@ let _animResolve = null
 function makeInstance(defId, owner, atkBonus = 0) {
   const def = getCardDef(defId)
   if (!def) return null
+
+  if (def.type === 'spell') {
+    return {
+      instanceId: `card_${++_instanceCounter}`,
+      defId: def.id,
+      name: def.name,
+      emoji: def.emoji,
+      type: 'spell',
+      manaCost: def.manaCost,
+      color: def.color,
+      owner,
+    }
+  }
+
   return {
     instanceId: `card_${++_instanceCounter}`,
     defId: def.id,
     name: def.name,
     emoji: def.emoji,
+    type: 'minion',
     atk: def.baseAtk + atkBonus,
     hp: def.baseHp,
     maxHp: def.baseHp,
@@ -70,6 +85,8 @@ export const useCombatStore = defineStore('combat', {
     // UI selection state
     selectedHandCardId: null,
     attackingCardId: null,
+    pendingSpellId: null,
+    spellTargetMode: null, // 'enemy_card' | 'friendly_card' | null
 
     // Run tracking
     gold: 0,
@@ -79,7 +96,8 @@ export const useCombatStore = defineStore('combat', {
     // Applied bonuses from meta/perks
     _atkBonus: 0,
     _defenseBonus: 0,
-    _critChance: 0,
+    _spellDmgBonus: 0,
+    _extraDraw: 0,
     _lifesteal: false,
     _extraStartCard: false,
     _extraTier2Card: false,
@@ -111,7 +129,8 @@ export const useCombatStore = defineStore('combat', {
       this.equippedPerkIds = []
       this._atkBonus = bonuses.atkBonus ?? 0
       this._defenseBonus = bonuses.defense ?? 0
-      this._critChance = bonuses.critChance ?? 0
+      this._spellDmgBonus = bonuses.spellDmgBonus ?? 0
+      this._extraDraw = 0
       this._lifesteal = (bonuses.lifestealChance ?? 0) > 0
       this._extraStartCard = (bonuses.extraStartCards ?? 0) > 0
       this._extraTier2Card = (bonuses.extraTier2Card ?? false)
@@ -164,6 +183,8 @@ export const useCombatStore = defineStore('combat', {
 
       this.selectedHandCardId = null
       this.attackingCardId = null
+      this.pendingSpellId = null
+      this.spellTargetMode = null
       this.currentTurn = 'player'
       this.phase = 'combat'
 
@@ -174,12 +195,18 @@ export const useCombatStore = defineStore('combat', {
     // ── Card draw ────────────────────────────────────────────────────────────
 
     drawCard(owner) {
+      const MAX_HAND = 10
       const deck = owner === 'player' ? this.playerDeck : this.enemyDeck
       const hand = owner === 'player' ? this.playerHand : this.enemyHand
       if (deck.length === 0) return
       const defId = deck.pop()
       const inst = makeInstance(defId, owner, owner === 'player' ? this._atkBonus : 0)
-      if (inst) hand.push(inst)
+      if (!inst) return
+      if (hand.length >= MAX_HAND) {
+        this._log(`${inst.name} burned (hand full)`, 'damage')
+        return
+      }
+      hand.push(inst)
     },
 
     // ── Hand / board actions ─────────────────────────────────────────────────
@@ -188,19 +215,38 @@ export const useCombatStore = defineStore('combat', {
       if (this.currentTurn !== 'player') return
       if (this.selectedHandCardId === id) {
         this.selectedHandCardId = null
+        this.pendingSpellId = null
+        this.spellTargetMode = null
         return
       }
       const card = this.playerHand.find(c => c.instanceId === id)
       if (!card) return
       if (card.manaCost > this.playerMana) return
-      this.selectedHandCardId = id
+
       this.attackingCardId = null
+
+      if (card.type === 'spell') {
+        const def = getCardDef(card.defId)
+        if (!def) return
+        if (def.spellTarget === 'no_target' || def.spellTarget === 'all_enemies' || def.spellTarget === 'all_friendly') {
+          this._castSpell(card)
+          return
+        }
+        this.selectedHandCardId = id
+        this.pendingSpellId = id
+        this.spellTargetMode = def.spellTarget
+      } else {
+        this.selectedHandCardId = id
+        this.pendingSpellId = null
+        this.spellTargetMode = null
+      }
     },
 
     playCardToBoard() {
       if (!this.selectedHandCardId) return
       const card = this.playerHand.find(c => c.instanceId === this.selectedHandCardId)
       if (!card) { this.selectedHandCardId = null; return }
+      if (card.type === 'spell') return // spells don't go on board
       if (card.manaCost > this.playerMana) return
       if (this.playerBoard.length >= 5) return
 
@@ -217,6 +263,14 @@ export const useCombatStore = defineStore('combat', {
 
     selectBoardCard(id) {
       if (this.currentTurn !== 'player') return
+
+      // Spell targeting on friendly card
+      if (this.pendingSpellId && this.spellTargetMode === 'friendly_card') {
+        const spell = this.playerHand.find(c => c.instanceId === this.pendingSpellId)
+        if (spell) this._castSpell(spell, id)
+        return
+      }
+
       if (this.selectedHandCardId) {
         this.playCardToBoard()
         return
@@ -228,6 +282,13 @@ export const useCombatStore = defineStore('combat', {
     },
 
     async attackTarget(targetId) {
+      // Spell targeting on enemy card/hero
+      if (this.pendingSpellId && this.spellTargetMode === 'enemy_card') {
+        const spell = this.playerHand.find(c => c.instanceId === this.pendingSpellId)
+        if (spell) this._castSpell(spell, targetId)
+        return
+      }
+
       if (!this.attackingCardId) return
       const attacker = this.playerBoard.find(c => c.instanceId === this.attackingCardId)
       if (!attacker) { this.attackingCardId = null; return }
@@ -240,15 +301,9 @@ export const useCombatStore = defineStore('combat', {
       const sound = useSoundStore()
 
       if (targetId === 'enemy-hero') {
-        let dmg = attacker.atk
-        if (Math.random() < this._critChance) {
-          dmg *= 2
-          this._log(`Crit! ${attacker.name} deals ${dmg} to enemy hero`, 'crit')
-          sound.crit?.()
-        } else {
-          this._log(`${attacker.name} attacks enemy hero for ${dmg}`, 'hit')
-          sound.attack?.()
-        }
+        const dmg = attacker.atk
+        this._log(`${attacker.name} attacks enemy hero for ${dmg}`, 'hit')
+        sound.attack?.()
         this.enemyHp = Math.max(0, this.enemyHp - dmg)
         attacker.hasAttackedThisTurn = true
         this._flashCard(attacker)
@@ -264,15 +319,9 @@ export const useCombatStore = defineStore('combat', {
 
     _resolveCardCombat(attacker, defender) {
       const sound = useSoundStore()
-      let atkDmg = attacker.atk
+      const atkDmg = attacker.atk
       const defDmg = defender.atk
-
-      if (Math.random() < this._critChance) {
-        atkDmg *= 2
-        sound.crit?.()
-      } else {
-        sound.attack?.()
-      }
+      sound.attack?.()
 
       defender.hp -= atkDmg
       attacker.hp -= defDmg
@@ -322,6 +371,197 @@ export const useCombatStore = defineStore('combat', {
       if (_animResolve) { _animResolve(); _animResolve = null }
     },
 
+    // ── Spell casting ──────────────────────────────────────────────────────
+
+    _castSpell(spell, targetId = null) {
+      const sound = useSoundStore()
+      const def = getCardDef(spell.defId)
+      if (!def) return
+
+      this.playerMana -= spell.manaCost
+      this.playerHand = this.playerHand.filter(c => c.instanceId !== spell.instanceId)
+      sound.spellCast?.()
+
+      const bonus = this._spellDmgBonus
+
+      switch (def.spellEffect) {
+        case 'damage': {
+          const dmg = def.spellValue + bonus
+          if (targetId === 'enemy-hero') {
+            this.enemyHp = Math.max(0, this.enemyHp - dmg)
+            this._log(`${spell.name} deals ${dmg} to enemy hero`, 'spell')
+            this._checkVictory()
+          } else {
+            const target = this.enemyBoard.find(c => c.instanceId === targetId)
+            if (target) {
+              target.hp -= dmg
+              this._flashCard(target)
+              this._log(`${spell.name} deals ${dmg} to ${target.name}`, 'spell')
+              this._checkCardDeath(target)
+            }
+          }
+          break
+        }
+        case 'buff': {
+          const target = this.playerBoard.find(c => c.instanceId === targetId)
+          if (target) {
+            target.atk += def.spellValue.atk
+            target.hp += def.spellValue.hp
+            target.maxHp += def.spellValue.hp
+            this._flashCard(target)
+            this._log(`${spell.name} buffs ${target.name} +${def.spellValue.atk}/+${def.spellValue.hp}`, 'spell')
+          }
+          break
+        }
+        case 'heal_hero': {
+          this.playerHp = Math.min(this.playerMaxHp, this.playerHp + def.spellValue)
+          this._log(`${spell.name} heals you for ${def.spellValue}`, 'spell')
+          break
+        }
+        case 'damage_all': {
+          const aoeDmg = def.spellValue + bonus
+          const targets = [...this.enemyBoard]
+          for (const card of targets) {
+            card.hp -= aoeDmg
+            this._flashCard(card)
+          }
+          this._log(`${spell.name} hits all enemies for ${aoeDmg}`, 'spell')
+          for (const card of targets) this._checkCardDeath(card)
+          break
+        }
+        case 'draw': {
+          for (let i = 0; i < def.spellValue; i++) this.drawCard('player')
+          this._log(`${spell.name}: drew ${def.spellValue} cards`, 'spell')
+          break
+        }
+        case 'draw_mana': {
+          for (let i = 0; i < def.spellValue.draw; i++) this.drawCard('player')
+          this.playerMana += def.spellValue.mana
+          this._log(`${spell.name}: drew ${def.spellValue.draw}, +${def.spellValue.mana} mana`, 'spell')
+          break
+        }
+        case 'damage_heal': {
+          const dhDmg = def.spellValue.damage + bonus
+          if (targetId === 'enemy-hero') {
+            this.enemyHp = Math.max(0, this.enemyHp - dhDmg)
+            this._log(`${spell.name} deals ${dhDmg} to enemy hero`, 'spell')
+            this._checkVictory()
+          } else {
+            const target = this.enemyBoard.find(c => c.instanceId === targetId)
+            if (target) {
+              target.hp -= dhDmg
+              this._flashCard(target)
+              this._log(`${spell.name} deals ${dhDmg} to ${target.name}`, 'spell')
+              this._checkCardDeath(target)
+            }
+          }
+          this.playerHp = Math.min(this.playerMaxHp, this.playerHp + def.spellValue.heal)
+          this._log(`Healed for ${def.spellValue.heal}`, 'heal')
+          break
+        }
+        case 'full_heal_buff': {
+          for (const card of this.playerBoard) {
+            card.hp = card.maxHp
+            card.atk += def.spellValue.atk
+            this._flashCard(card)
+          }
+          this._log(`${spell.name}: all cards restored, +${def.spellValue.atk} ATK`, 'spell')
+          break
+        }
+      }
+
+      this.selectedHandCardId = null
+      this.pendingSpellId = null
+      this.spellTargetMode = null
+    },
+
+    _resolveEnemySpell(spell) {
+      const def = getCardDef(spell.defId)
+      if (!def) return
+
+      switch (def.spellEffect) {
+        case 'damage': {
+          const targets = this.playerBoard.filter(c => c.hp > 0)
+          if (targets.length > 0) {
+            const target = targets.reduce((min, c) => c.hp < min.hp ? c : min, targets[0])
+            target.hp -= def.spellValue
+            this._flashCard(target)
+            this._log(`Enemy ${spell.name} deals ${def.spellValue} to ${target.name}`, 'spell')
+            this._checkCardDeath(target)
+          } else {
+            this.playerHp = Math.max(0, this.playerHp - def.spellValue)
+            this._log(`Enemy ${spell.name} deals ${def.spellValue} to you`, 'damage')
+            this._checkPlayerDeath()
+          }
+          break
+        }
+        case 'buff': {
+          const targets = this.enemyBoard.filter(c => c.hp > 0)
+          if (targets.length > 0) {
+            const target = targets.reduce((max, c) => c.atk > max.atk ? c : max, targets[0])
+            target.atk += def.spellValue.atk
+            target.hp += def.spellValue.hp
+            target.maxHp += def.spellValue.hp
+            this._flashCard(target)
+            this._log(`Enemy ${spell.name} buffs ${target.name}`, 'spell')
+          }
+          break
+        }
+        case 'heal_hero': {
+          this.enemyHp = Math.min(this.enemyMaxHp, this.enemyHp + def.spellValue)
+          this._log(`Enemy ${spell.name} heals for ${def.spellValue}`, 'spell')
+          break
+        }
+        case 'damage_all': {
+          const targets = [...this.playerBoard]
+          for (const card of targets) {
+            card.hp -= def.spellValue
+            this._flashCard(card)
+          }
+          this._log(`Enemy ${spell.name} hits all your cards for ${def.spellValue}`, 'spell')
+          for (const card of targets) this._checkCardDeath(card)
+          this._checkPlayerDeath()
+          break
+        }
+        case 'draw': {
+          for (let i = 0; i < def.spellValue; i++) this.drawCard('enemy')
+          this._log(`Enemy ${spell.name}: draws cards`, 'spell')
+          break
+        }
+        case 'draw_mana': {
+          for (let i = 0; i < def.spellValue.draw; i++) this.drawCard('enemy')
+          this.enemyMana += def.spellValue.mana
+          this._log(`Enemy ${spell.name}: draws and gains mana`, 'spell')
+          break
+        }
+        case 'damage_heal': {
+          const targets = this.playerBoard.filter(c => c.hp > 0)
+          if (targets.length > 0) {
+            const target = targets.reduce((min, c) => c.hp < min.hp ? c : min, targets[0])
+            target.hp -= def.spellValue.damage
+            this._flashCard(target)
+            this._log(`Enemy ${spell.name} deals ${def.spellValue.damage} to ${target.name}`, 'spell')
+            this._checkCardDeath(target)
+          } else {
+            this.playerHp = Math.max(0, this.playerHp - def.spellValue.damage)
+            this._log(`Enemy ${spell.name} deals ${def.spellValue.damage} to you`, 'damage')
+            this._checkPlayerDeath()
+          }
+          this.enemyHp = Math.min(this.enemyMaxHp, this.enemyHp + def.spellValue.heal)
+          break
+        }
+        case 'full_heal_buff': {
+          for (const card of this.enemyBoard) {
+            card.hp = card.maxHp
+            card.atk += def.spellValue.atk
+            this._flashCard(card)
+          }
+          this._log(`Enemy ${spell.name} restores all cards`, 'spell')
+          break
+        }
+      }
+    },
+
     // ── Turn management ──────────────────────────────────────────────────────
 
     endPlayerTurn() {
@@ -330,6 +570,8 @@ export const useCombatStore = defineStore('combat', {
       sound.turnEnd?.()
       this.selectedHandCardId = null
       this.attackingCardId = null
+      this.pendingSpellId = null
+      this.spellTargetMode = null
       this.currentTurn = 'enemy'
       this._doEnemyTurn()
     },
@@ -348,18 +590,24 @@ export const useCombatStore = defineStore('combat', {
       while (played) {
         played = false
         await delay(600)
+        if (this.phase !== 'combat') return
         const playable = this.enemyHand
-          .filter(c => c.manaCost <= this.enemyMana && this.enemyBoard.length < 5)
+          .filter(c => c.manaCost <= this.enemyMana && (c.type === 'spell' || this.enemyBoard.length < 5))
           .sort((a, b) => b.manaCost - a.manaCost)
         if (playable.length > 0) {
           const card = playable[0]
           this.enemyMana -= card.manaCost
           this.enemyHand = this.enemyHand.filter(c => c.instanceId !== card.instanceId)
-          card.hasSummoningSickness = true
-          card.hasAttackedThisTurn = false
-          this.enemyBoard.push(card)
-          sound.cardPlay?.()
-          this._log(`Enemy plays ${card.name}`, 'info')
+          if (card.type === 'spell') {
+            this._resolveEnemySpell(card)
+            sound.spellCast?.()
+          } else {
+            card.hasSummoningSickness = true
+            card.hasAttackedThisTurn = false
+            this.enemyBoard.push(card)
+            sound.cardPlay?.()
+            this._log(`Enemy plays ${card.name}`, 'info')
+          }
           played = true
         }
       }
@@ -421,6 +669,7 @@ export const useCombatStore = defineStore('combat', {
       this.playerMana = this.playerManaMax
 
       this.drawCard('player')
+      for (let i = 0; i < this._extraDraw; i++) this.drawCard('player')
 
       for (const card of this.playerBoard) {
         card.hasSummoningSickness = false
@@ -432,7 +681,6 @@ export const useCombatStore = defineStore('combat', {
       }
 
       this.currentTurn = 'player'
-      this._log('Your turn', 'info')
     },
 
     // ── Victory / Defeat ─────────────────────────────────────────────────────
@@ -517,7 +765,8 @@ export const useCombatStore = defineStore('combat', {
     _applyPerk(perk) {
       if (perk.effect === 'atk') this._atkBonus += perk.value
       else if (perk.effect === 'defense') this._defenseBonus += perk.value
-      else if (perk.effect === 'crit') this._critChance = Math.min(1, this._critChance + perk.value)
+      else if (perk.effect === 'spell_dmg') this._spellDmgBonus += perk.value
+      else if (perk.effect === 'extra_draw') this._extraDraw += perk.value
       else if (perk.effect === 'max_hp') {
         this.playerMaxHp += perk.value
         this.playerHp = Math.min(this.playerMaxHp, this.playerHp + perk.value)
@@ -529,7 +778,10 @@ export const useCombatStore = defineStore('combat', {
         this._defenseBonus += perk.defense ?? 0
       } else if (perk.effect === 'combo_dmg') {
         this._atkBonus += perk.atk ?? 0
-        this._critChance = Math.min(1, this._critChance + (perk.crit ?? 0))
+        if (perk.max_hp) {
+          this.playerMaxHp += perk.max_hp
+          this.playerHp = Math.min(this.playerMaxHp, this.playerHp + perk.max_hp)
+        }
       } else if (perk.effect === 'combo_cannon') {
         this._atkBonus += perk.atk ?? 0
         const penalty = perk.hp_penalty ?? 0

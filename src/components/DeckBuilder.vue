@@ -11,7 +11,7 @@ const combat = useCombatStore()
 const sound = useSoundStore()
 
 const MIN_DECK = 20
-const MAX_DECK = 40
+const MAX_DECK = 30
 const MAX_COPIES = 4
 
 // Initialize from custom deck or starter deck
@@ -19,6 +19,14 @@ const deck = ref(meta.customDeck ? [...meta.customDeck] : [...getStartingDeck()]
 
 const sortBy = ref('cost') // 'cost' or 'tier'
 const hoveredCard = ref(null)
+const alertMsg = ref(null)
+let alertTimer = null
+
+function showAlert(msg) {
+  alertMsg.value = msg
+  clearTimeout(alertTimer)
+  alertTimer = setTimeout(() => { alertMsg.value = null }, 2000)
+}
 const tooltipRef = ref(null)
 const tooltipStyle = ref({ left: '0px', top: '0px' })
 
@@ -73,10 +81,11 @@ const maxCurveVal = computed(() => Math.max(1, ...Object.values(manaCurve.value)
 const isValid = computed(() => deck.value.length >= MIN_DECK && deck.value.length <= MAX_DECK)
 
 function addCard(cardId) {
-  if (deck.value.length >= MAX_DECK) return
+  if (deck.value.length >= MAX_DECK) { showAlert('Deck is full (max ' + MAX_DECK + ')'); return }
   const inDeck = deck.value.filter(d => d === cardId).length
   const owned = meta.collection[cardId] ?? 0
-  if (inDeck >= MAX_COPIES || inDeck >= owned) return
+  if (inDeck >= MAX_COPIES) { showAlert('Max ' + MAX_COPIES + ' copies per card'); return }
+  if (inDeck >= owned) { showAlert('No more copies available'); return }
   deck.value.push(cardId)
   sound.cardPlay?.()
 }
@@ -135,6 +144,14 @@ function hideCard() {
       </p>
     </div>
 
+    <!-- Alert -->
+    <div
+      v-if="alertMsg"
+      class="mb-2 py-1.5 px-4 rounded-lg bg-hp/15 border border-hp/30 text-hp text-xs text-center font-bold"
+    >
+      {{ alertMsg }}
+    </div>
+
     <div class="flex gap-4 flex-1 min-h-0">
 
       <!-- Left: Collection (only cards with available copies) -->
@@ -170,20 +187,22 @@ function hideCard() {
                    hover:scale-105 hover:border-energy/60 bg-surface"
             :style="{ borderColor: getTierColor(card.tier) + '40' }"
             @click="addCard(card.id)"
-            @mouseenter="showCard(card, $event)"
-            @mouseleave="hideCard"
           >
-            <div class="text-3xl text-center mb-1">{{ card.emoji }}</div>
-            <div class="text-[11px] font-bold text-white text-center truncate leading-tight">{{ card.name }}</div>
-            <div class="flex justify-center gap-2 text-[11px] mt-1">
-              <span class="text-gold font-mono">{{ card.baseAtk }}⚔</span>
-              <span class="text-hp font-mono">{{ card.baseHp }}♥</span>
+            <div class="text-5xl text-center mb-1.5">{{ card.emoji }}</div>
+            <div class="text-sm font-bold text-white text-center truncate leading-tight">{{ card.name }}</div>
+            <div v-if="card.type === 'spell'" class="text-[9px] text-rate font-extrabold uppercase tracking-wider text-center mt-1">Spell</div>
+            <div v-if="card.type === 'spell'" class="text-[10px] text-center text-white/60 leading-tight mt-1 px-1">{{ card.description }}</div>
+            <div v-else class="flex justify-center gap-2.5 text-sm mt-1.5">
+              <span class="text-gold font-mono">{{ card.baseAtk }} ⚔</span>
+              <span class="text-hp font-mono">{{ card.baseHp }} ♥</span>
             </div>
-            <div class="text-[10px] text-center font-bold mt-1" :style="{ color: getTierColor(card.tier) }">
+            <div class="flex justify-center text-sm mt-1">
+              <span class="text-energy font-mono">{{ card.manaCost }} 💧</span>
+            </div>
+            <div class="text-xs text-center font-bold mt-1.5" :style="{ color: getTierColor(card.tier) }">
               {{ getTierLabel(card.tier) }}
             </div>
-            <div class="text-[10px] text-center text-energy/60 font-mono">{{ card.manaCost }} mana</div>
-            <div class="text-[10px] text-center mt-0.5 text-dim">
+            <div class="text-xs text-center mt-0.5 text-dim">
               {{ card.available }} left
             </div>
           </div>
@@ -205,7 +224,7 @@ function hideCard() {
               deck.length < MIN_DECK ? 'text-hp' : deck.length <= MAX_DECK ? 'text-xp' : 'text-hp'
             ]"
           >
-            {{ deck.length }}
+            {{ deck.length }}/{{ MAX_DECK }}
           </div>
         </div>
 
@@ -293,11 +312,17 @@ function hideCard() {
   >
     <div class="text-4xl text-center mb-1">{{ hoveredCard.emoji }}</div>
     <div class="text-sm font-bold text-white text-center">{{ hoveredCard.name }}</div>
-    <div class="flex justify-center gap-3 text-sm mt-1.5">
-      <span class="text-gold font-mono font-bold">{{ hoveredCard.baseAtk }} ⚔</span>
-      <span class="text-hp font-mono font-bold">{{ hoveredCard.baseHp }} ♥</span>
-      <span class="text-energy font-mono font-bold">{{ hoveredCard.manaCost }} 💧</span>
-    </div>
+    <template v-if="hoveredCard.type === 'spell'">
+      <div class="text-[9px] text-rate font-extrabold uppercase tracking-wider text-center mt-1">Spell</div>
+      <div class="text-energy font-mono font-bold text-sm text-center mt-1">{{ hoveredCard.manaCost }} 💧</div>
+    </template>
+    <template v-else>
+      <div class="flex justify-center gap-3 text-sm mt-1.5">
+        <span class="text-gold font-mono font-bold">{{ hoveredCard.baseAtk }} ⚔</span>
+        <span class="text-hp font-mono font-bold">{{ hoveredCard.baseHp }} ♥</span>
+        <span class="text-energy font-mono font-bold">{{ hoveredCard.manaCost }} 💧</span>
+      </div>
+    </template>
     <div class="text-[10px] font-bold text-center mt-1.5" :style="{ color: getTierColor(hoveredCard.tier) }">
       {{ getTierLabel(hoveredCard.tier) }} · Tier {{ hoveredCard.tier }}
     </div>

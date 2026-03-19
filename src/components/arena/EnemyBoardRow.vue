@@ -16,6 +16,8 @@ function startAttackDrag(attackerId) {
 
 // ── Hero drop zone ────────────────────────────────────────────────────────────
 
+const isTargeting = () => !!(combat.attackingCardId || combat.spellTargetMode === 'enemy_card')
+
 function onHeroDragOver(e) {
   if (!combat.attackingCardId) return
   e.preventDefault()
@@ -38,7 +40,7 @@ function onHeroDrop(e) {
 // ── Enemy card drop zones ─────────────────────────────────────────────────────
 
 function onCardDragOver(e, cardId) {
-  if (!combat.attackingCardId) return
+  if (!isTargeting()) return
   e.preventDefault()
   e.dataTransfer.dropEffect = 'move'
   cardDropOver.value = cardId
@@ -57,27 +59,28 @@ function onCardDrop(e, cardId) {
 }
 
 function handleCardClick(cardId) {
-  if (combat.attackingCardId) combat.attackTarget(cardId)
+  if (isTargeting()) combat.attackTarget(cardId)
 }
 </script>
 
 <template>
   <div class="flex flex-col items-center gap-2">
 
-    <!-- Enemy mana -->
-    <div class="flex items-center gap-3 w-full px-1">
-      <span class="text-xs font-bold text-purple-400 uppercase tracking-widest shrink-0">Enemy Mana</span>
-      <div class="flex gap-1 flex-1">
-        <div
-          v-for="i in combat.enemyManaMax"
-          :key="i"
-          class="flex-1 h-3 rounded-sm transition-all duration-200"
-          :class="i <= combat.enemyMana ? 'bg-purple-500' : 'bg-white/10'"
-        />
+    <!-- Enemy hand (face-down cards) -->
+    <div class="flex justify-center gap-1 min-h-[44px]">
+      <div
+        v-for="(_, i) in combat.enemyHand"
+        :key="i"
+        class="w-8 h-11 rounded bg-gradient-to-br from-hp/30 to-hp/10 border border-hp/20
+               flex items-center justify-center text-[10px] text-hp/40"
+      >
+        ?
       </div>
-      <span class="text-base font-extrabold font-mono text-purple-300 shrink-0">
-        {{ combat.enemyMana }}<span class="text-sm text-dim">/{{ combat.enemyManaMax }}</span>
-      </span>
+    </div>
+
+    <!-- Enemy mana -->
+    <div class="text-xs text-center font-bold font-mono text-purple-300">
+      {{ combat.enemyMana }}/{{ combat.enemyManaMax }} mana
     </div>
 
     <!-- Enemy hero (drop target) -->
@@ -86,10 +89,10 @@ function handleCardClick(cardId) {
       class="flex flex-col items-center gap-1 px-4 py-2 rounded-xl border transition-all duration-150 select-none"
       :class="heroDropOver
         ? 'border-hp bg-hp/20 ring-2 ring-hp/60 scale-105'
-        : combat.attackingCardId
+        : isTargeting()
           ? 'cursor-pointer border-hp/60 bg-hp/10 hover:bg-hp/20 ring-1 ring-hp/40'
           : 'border-transparent'"
-      @click="combat.attackingCardId && combat.attackTarget('enemy-hero')"
+      @click="isTargeting() && combat.attackTarget('enemy-hero')"
       @dragover="onHeroDragOver"
       @dragleave="onHeroDragLeave"
       @drop="onHeroDrop"
@@ -107,6 +110,7 @@ function handleCardClick(cardId) {
         {{ combat.enemyHp }}<span class="text-dim text-[9px]">/{{ combat.enemyMaxHp }}</span>
       </div>
       <div v-if="heroDropOver" class="text-[9px] text-hp font-bold">⚔ Drop to attack</div>
+      <div v-else-if="combat.spellTargetMode === 'enemy_card'" class="text-[9px] text-rate font-bold animate-pulse">✦ Cast here</div>
       <div v-else-if="combat.attackingCardId" class="text-[9px] text-hp font-bold animate-pulse">⚔ Attack Hero</div>
     </div>
 
@@ -124,7 +128,7 @@ function handleCardClick(cardId) {
         <BoardCard
           :card="card"
           :is-enemy="true"
-          :is-attack-target="!!combat.attackingCardId"
+          :is-attack-target="isTargeting()"
           @click="handleCardClick(card.instanceId)"
           @drag-attack-start="startAttackDrag"
         />

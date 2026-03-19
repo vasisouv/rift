@@ -130,6 +130,14 @@ export const useSoundStore = defineStore('sound', {
       })
     },
 
+    spellCast() {
+      this.play(() => {
+        tone({ freq: 600, freqEnd: 1200, type: 'sine', vol: 0.18, dur: 0.15 })
+        tone({ freq: 800, freqEnd: 400, type: 'sine', vol: 0.12, start: 0.1, dur: 0.2 })
+        noise({ vol: 0.08, dur: 0.1, bandFreq: 3000, q: 2 })
+      })
+    },
+
     turnEnd() {
       this.play(() => {
         tone({ freq: 440, freqEnd: 330, type: 'sine', vol: 0.12, dur: 0.18 })

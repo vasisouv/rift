@@ -5,6 +5,7 @@ const props = defineProps({
   canAttack: { type: Boolean, default: false },
   isEnemy: { type: Boolean, default: false },
   isAttackTarget: { type: Boolean, default: false },
+  isSpellTarget: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['click', 'drag-attack-start', 'drag-attack-end'])
@@ -32,7 +33,8 @@ function onDragEnd() {
       'transition-all duration-100',
       card.hitFlash ? 'brightness-200' : '',
       selected ? 'border-energy ring-1 ring-energy/60 bg-energy/10' : '',
-      isAttackTarget ? 'border-hp ring-1 ring-hp/60 bg-hp/10 animate-pulse' : '',
+      isAttackTarget && !isSpellTarget ? 'border-hp ring-1 ring-hp/60 bg-hp/10 animate-pulse' : '',
+      isSpellTarget ? 'border-rate ring-1 ring-rate/60 bg-rate/10 animate-pulse cursor-pointer' : '',
       canAttack && !selected && !isAttackTarget
         ? 'card-ready-attack bg-energy/5'
         : '',
