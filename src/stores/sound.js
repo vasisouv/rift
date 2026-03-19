@@ -136,5 +136,24 @@ export const useSoundStore = defineStore('sound', {
         tone({ freq: 220, type: 'sine', vol: 0.08, start: 0.15, dur: 0.12 })
       })
     },
+
+    packOpen() {
+      this.play(() => {
+        noise({ vol: 0.3, dur: 0.25, bandFreq: 2000, q: 0.5 })
+        tone({ freq: 300, freqEnd: 800, type: 'sine', vol: 0.25, dur: 0.3 })
+        tone({ freq: 400, freqEnd: 1200, type: 'sine', vol: 0.2, start: 0.1, dur: 0.25 })
+      })
+    },
+
+    cardReveal(tier = 1) {
+      this.play(() => {
+        const f = 400 + tier * 80
+        tone({ freq: f, freqEnd: f * 1.5, type: 'sine', vol: 0.15, dur: 0.15 })
+        if (tier >= 7) {
+          tone({ freq: f * 1.5, type: 'sine', vol: 0.12, start: 0.1, dur: 0.25 })
+          tone({ freq: f * 2, type: 'sine', vol: 0.1, start: 0.2, dur: 0.3 })
+        }
+      })
+    },
   },
 })

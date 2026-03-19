@@ -6,6 +6,7 @@ import { useMetaStore } from './meta.js'
 import { useSoundStore } from './sound.js'
 
 let _instanceCounter = 0
+let _animResolve = null
 function makeInstance(defId, owner, atkBonus = 0) {
   const def = getCardDef(defId)
   if (!def) return null
@@ -127,7 +128,8 @@ export const useCombatStore = defineStore('combat', {
     startLevel() {
       const sound = useSoundStore()
 
-      let startDeck = shuffle(getStartingDeck())
+      const meta = useMetaStore()
+      let startDeck = shuffle(meta.getActiveDeck)
       if (this._extraTier2Card) startDeck = [...startDeck, 'specter']
       this.playerDeck = shuffle(startDeck)
 
@@ -225,13 +227,15 @@ export const useCombatStore = defineStore('combat', {
       this.attackingCardId = this.attackingCardId === id ? null : id
     },
 
-    attackTarget(targetId) {
+    async attackTarget(targetId) {
       if (!this.attackingCardId) return
       const attacker = this.playerBoard.find(c => c.instanceId === this.attackingCardId)
       if (!attacker) { this.attackingCardId = null; return }
 
-      // Trigger travel animation before resolving damage
+      // Trigger travel animation and wait for it to finish
       this.attackAnimation = { attackerId: this.attackingCardId, targetId, id: Date.now() }
+      this.attackingCardId = null
+      await this._waitForAnimation()
 
       const sound = useSoundStore()
 
@@ -245,20 +249,17 @@ export const useCombatStore = defineStore('combat', {
           this._log(`${attacker.name} attacks enemy hero for ${dmg}`, 'hit')
           sound.attack?.()
         }
-        this._animateAttack(attacker)
         this.enemyHp = Math.max(0, this.enemyHp - dmg)
         attacker.hasAttackedThisTurn = true
         this._flashCard(attacker)
-        this.attackingCardId = null
         this._checkVictory()
         return
       }
 
       const defender = this.enemyBoard.find(c => c.instanceId === targetId)
-      if (!defender) { this.attackingCardId = null; return }
+      if (!defender) return
 
       this._resolveCardCombat(attacker, defender)
-      this.attackingCardId = null
     },
 
     _resolveCardCombat(attacker, defender) {
@@ -273,7 +274,6 @@ export const useCombatStore = defineStore('combat', {
         sound.attack?.()
       }
 
-      this._animateAttack(attacker)
       defender.hp -= atkDmg
       attacker.hp -= defDmg
 
@@ -310,9 +310,16 @@ export const useCombatStore = defineStore('combat', {
       setTimeout(() => { card.hitFlash = false }, 300)
     },
 
-    _animateAttack(card) {
-      card.attacking = true
-      setTimeout(() => { card.attacking = false }, 400)
+    _waitForAnimation() {
+      return new Promise(resolve => {
+        _animResolve = resolve
+        // Fallback timeout in case animation doesn't fire
+        setTimeout(() => { if (_animResolve === resolve) { resolve(); _animResolve = null } }, 1200)
+      })
+    },
+
+    onAnimationDone() {
+      if (_animResolve) { _animResolve(); _animResolve = null }
     },
 
     // ── Turn management ──────────────────────────────────────────────────────
@@ -366,13 +373,13 @@ export const useCombatStore = defineStore('combat', {
         const playerCards = this.playerBoard.filter(c => c.hp > 0)
         if (playerCards.length > 0) {
           const target = playerCards.reduce((min, c) => c.hp < min.hp ? c : min, playerCards[0])
-          this._resolveEnemyAttackCard(attacker, target)
+          await this._resolveEnemyAttackCard(attacker, target)
         } else {
+          this.attackAnimation = { attackerId: attacker.instanceId, targetId: 'player-hero', id: Date.now() }
+          await this._waitForAnimation()
           const dmg = Math.max(0, attacker.atk - this._defenseBonus)
           this._log(`Enemy ${attacker.name} attacks you for ${dmg}`, 'damage')
           sound.enemyHit?.()
-          this.attackAnimation = { attackerId: attacker.instanceId, targetId: 'player-hero', id: Date.now() }
-          this._animateAttack(attacker)
           this.playerHp = Math.max(0, this.playerHp - dmg)
           attacker.hasAttackedThisTurn = true
           this._flashCard(attacker)
@@ -385,13 +392,14 @@ export const useCombatStore = defineStore('combat', {
       this._endEnemyTurn()
     },
 
-    _resolveEnemyAttackCard(attacker, defender) {
+    async _resolveEnemyAttackCard(attacker, defender) {
       const sound = useSoundStore()
       const atkDmg = attacker.atk
       const defDmg = defender.atk
 
       this.attackAnimation = { attackerId: attacker.instanceId, targetId: defender.instanceId, id: Date.now() }
-      this._animateAttack(attacker)
+      await this._waitForAnimation()
+
       defender.hp -= atkDmg
       attacker.hp -= defDmg
 

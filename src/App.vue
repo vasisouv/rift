@@ -10,6 +10,7 @@ import CombatLog from './components/CombatLog.vue'
 import BetweenLevelScreen from './components/BetweenLevelScreen.vue'
 import GameOverScreen from './components/GameOverScreen.vue'
 import MetaShop from './components/MetaShop.vue'
+import DeckBuilder from './components/DeckBuilder.vue'
 
 const game = useGameStore()
 const combat = useCombatStore()
@@ -96,6 +97,11 @@ onUnmounted(() => {
     <!-- META SHOP -->
     <template v-else-if="combat.phase === 'meta-shop'">
       <MetaShop />
+    </template>
+
+    <!-- DECK BUILDER -->
+    <template v-else-if="combat.phase === 'deck-builder'">
+      <DeckBuilder />
     </template>
 
   </div>

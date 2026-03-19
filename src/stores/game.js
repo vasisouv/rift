@@ -23,6 +23,7 @@ export const useGameStore = defineStore('game', {
       const meta = useMetaStore()
       const combat = useCombatStore()
       localStorage.removeItem('void_harvest_meta_v1')
+      localStorage.removeItem('void_harvest_meta_v2')
       meta.$reset()
       combat.restartRun()
     },

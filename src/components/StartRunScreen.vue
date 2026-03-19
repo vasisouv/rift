@@ -20,8 +20,8 @@ const b = () => meta.startingBonuses
       <p class="text-dim text-sm">A card combat roguelike. Reduce the enemy hero to 0 HP.</p>
     </div>
 
-    <!-- Shard balance + shop link -->
-    <div class="flex items-center gap-4">
+    <!-- Shard balance + navigation -->
+    <div class="flex items-center gap-3">
       <div class="flex items-center gap-2 text-sm">
         <span>💎</span>
         <span class="text-gold font-bold font-mono">{{ meta.voidShards }}</span>
@@ -33,6 +33,19 @@ const b = () => meta.startingBonuses
       >
         💎 Void Shop
       </button>
+      <button
+        class="px-4 py-1.5 bg-energy/10 border border-energy/40 rounded-lg text-energy text-xs font-bold hover:bg-energy/20 transition-colors"
+        @click="combat.phase = 'deck-builder'"
+      >
+        🃏 Deck Builder
+      </button>
+    </div>
+
+    <!-- Deck info -->
+    <div class="flex items-center gap-3 text-[11px] text-dim">
+      <span>Deck: <span class="text-white/70 font-mono">{{ meta.deckLabel }}</span></span>
+      <span>·</span>
+      <span>Collection: <span class="text-white/70 font-mono">{{ meta.collectionSize }}</span> unique cards</span>
     </div>
 
     <!-- Active meta bonuses -->

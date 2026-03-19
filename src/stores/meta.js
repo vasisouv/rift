@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { META_UPGRADES, getUpgradeCost } from '../data/metaUpgrades'
 import { getRandomPerks } from '../data/perks'
+import { getStartingDeck } from '../data/cards'
+import { BOOSTER_PACKS, rollPack } from '../data/boosterPacks'
 
 export const useMetaStore = defineStore('meta', {
   state: () => ({
@@ -8,6 +10,11 @@ export const useMetaStore = defineStore('meta', {
     totalShardsEarned: 0,
     purchasedLevels: {}, // { upgradeId: currentLevel }
     totalRuns: 0,
+
+    // Collection & deck building
+    collection: {},      // { [cardId]: count }
+    customDeck: null,    // array of card IDs or null (uses default)
+    totalPacksOpened: 0,
   }),
 
   getters: {
@@ -46,6 +53,20 @@ export const useMetaStore = defineStore('meta', {
     hasAnyUpgrade(state) {
       return Object.values(state.purchasedLevels).some(v => v > 0)
     },
+
+    getActiveDeck(state) {
+      if (!state.customDeck || state.customDeck.length < 20) return getStartingDeck()
+      return [...state.customDeck]
+    },
+
+    collectionSize(state) {
+      return Object.keys(state.collection).length
+    },
+
+    deckLabel(state) {
+      if (!state.customDeck) return 'Default (30)'
+      return `Custom (${state.customDeck.length})`
+    },
   },
 
   actions: {
@@ -56,6 +77,46 @@ export const useMetaStore = defineStore('meta', {
 
     recordRun() {
       this.totalRuns++
+    },
+
+    seedStarterCollection() {
+      if (Object.keys(this.collection).length > 0) return
+      const deck = getStartingDeck()
+      const coll = {}
+      for (const id of deck) {
+        coll[id] = (coll[id] ?? 0) + 1
+      }
+      this.collection = coll
+    },
+
+    addCardsToCollection(cardIds) {
+      const coll = { ...this.collection }
+      for (const id of cardIds) {
+        coll[id] = (coll[id] ?? 0) + 1
+      }
+      this.collection = coll
+    },
+
+    buyBoosterPack(packId) {
+      const pack = BOOSTER_PACKS.find(p => p.id === packId)
+      if (!pack) return null
+      if (this.voidShards < pack.cost) return null
+      this.voidShards -= pack.cost
+      const cards = rollPack(pack)
+      this.addCardsToCollection(cards.map(c => c.id))
+      this.totalPacksOpened++
+      this.save()
+      return cards
+    },
+
+    setCustomDeck(cardIds) {
+      this.customDeck = [...cardIds]
+      this.save()
+    },
+
+    clearCustomDeck() {
+      this.customDeck = null
+      this.save()
     },
 
     buyUpgrade(upgradeId) {
@@ -90,27 +151,60 @@ export const useMetaStore = defineStore('meta', {
     },
 
     save() {
-      localStorage.setItem('void_harvest_meta_v1', JSON.stringify({
-        version: 1,
+      localStorage.setItem('void_harvest_meta_v2', JSON.stringify({
+        version: 2,
         voidShards: this.voidShards,
         totalShardsEarned: this.totalShardsEarned,
         purchasedLevels: { ...this.purchasedLevels },
         totalRuns: this.totalRuns,
+        collection: { ...this.collection },
+        customDeck: this.customDeck ? [...this.customDeck] : null,
+        totalPacksOpened: this.totalPacksOpened,
       }))
     },
 
     load() {
       try {
-        const raw = localStorage.getItem('void_harvest_meta_v1')
-        if (!raw) return
-        const data = JSON.parse(raw)
-        if (data.version !== 1) return
-        this.voidShards = data.voidShards ?? 0
-        this.totalShardsEarned = data.totalShardsEarned ?? 0
-        this.purchasedLevels = data.purchasedLevels ?? {}
-        this.totalRuns = data.totalRuns ?? 0
+        // Try v2 first
+        let raw = localStorage.getItem('void_harvest_meta_v2')
+        if (raw) {
+          const data = JSON.parse(raw)
+          if (data.version === 2) {
+            this.voidShards = data.voidShards ?? 0
+            this.totalShardsEarned = data.totalShardsEarned ?? 0
+            this.purchasedLevels = data.purchasedLevels ?? {}
+            this.totalRuns = data.totalRuns ?? 0
+            this.collection = data.collection ?? {}
+            this.customDeck = data.customDeck ?? null
+            this.totalPacksOpened = data.totalPacksOpened ?? 0
+            if (Object.keys(this.collection).length === 0) this.seedStarterCollection()
+            return
+          }
+        }
+
+        // Migrate from v1
+        raw = localStorage.getItem('void_harvest_meta_v1')
+        if (raw) {
+          const data = JSON.parse(raw)
+          if (data.version === 1) {
+            this.voidShards = data.voidShards ?? 0
+            this.totalShardsEarned = data.totalShardsEarned ?? 0
+            this.purchasedLevels = data.purchasedLevels ?? {}
+            this.totalRuns = data.totalRuns ?? 0
+            this.seedStarterCollection()
+            this.customDeck = null
+            this.totalPacksOpened = 0
+            this.save()
+            localStorage.removeItem('void_harvest_meta_v1')
+            return
+          }
+        }
+
+        // Brand new player
+        this.seedStarterCollection()
       } catch (e) {
         console.error('Meta load failed:', e)
+        this.seedStarterCollection()
       }
     },
   },

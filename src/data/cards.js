@@ -863,6 +863,26 @@ export function getCardDef(id) {
   return CARD_DEFS.find(c => c.id === id)
 }
 
+export function getCardsByTier(tier) {
+  return CARD_DEFS.filter(c => c.tier === tier)
+}
+
+export function getTierLabel(tier) {
+  if (tier <= 2) return 'Common'
+  if (tier <= 4) return 'Uncommon'
+  if (tier <= 6) return 'Rare'
+  if (tier <= 8) return 'Epic'
+  return 'Legendary'
+}
+
+export function getTierColor(tier) {
+  if (tier <= 2) return '#aaaaaa'
+  if (tier <= 4) return '#44ff88'
+  if (tier <= 6) return '#4488ff'
+  if (tier <= 8) return '#bb44ff'
+  return '#ff8800'
+}
+
 // Player starts with a balanced 30-card deck (tiers 1–4, weighted toward cheap cards)
 export function getStartingDeck() {
   return [
