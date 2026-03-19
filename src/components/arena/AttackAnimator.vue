@@ -1,5 +1,6 @@
 <script setup>
 import { watch, nextTick } from 'vue'
+import gsap from 'gsap'
 import { useCombatStore } from '../../stores/combat.js'
 
 const combat = useCombatStore()
@@ -25,7 +26,7 @@ watch(
 
     const attackerEl = findEl(anim.attackerId)
     const targetEl   = findEl(anim.targetId)
-    if (!attackerEl || !targetEl) return
+    if (!attackerEl || !targetEl) { combat.onAnimationDone(); return }
 
     const fromRect = attackerEl.getBoundingClientRect()
     const from     = getCenter(attackerEl)
@@ -51,23 +52,50 @@ watch(
     // Hide the original while the clone is flying
     attackerEl.style.opacity = '0'
 
-    const fly = clone.animate(
-      [
-        { transform: 'translate(0,0) scale(1)',                         filter: 'brightness(1)',   offset: 0    },
-        { transform: `translate(${dx*0.9}px,${dy*0.9}px) scale(1.12)`, filter: 'brightness(1.6)', offset: 0.48 },
-        { transform: `translate(${dx}px,${dy}px) scale(0.92)`,         filter: 'brightness(2.2)', offset: 0.54 },
-        { transform: `translate(${dx*0.7}px,${dy*0.7}px) scale(1.05)`, filter: 'brightness(1.2)', offset: 0.65 },
-        { transform: 'translate(0,0) scale(1)',                         filter: 'brightness(1)',   offset: 1    },
-      ],
-      { duration: 650, easing: 'ease-in-out', fill: 'none' }
-    )
+    const tl = gsap.timeline({
+      onComplete() {
+        clone.remove()
+        attackerEl.style.opacity = ''
+        combat.onAnimationDone()
+      },
+    })
 
-    const cleanup = () => {
-      clone.remove()
-      attackerEl.style.opacity = ''
-    }
-    fly.onfinish = cleanup
-    fly.oncancel = cleanup
+    // Lunge toward target
+    tl.to(clone, {
+      x: dx * 0.9,
+      y: dy * 0.9,
+      scale: 1.12,
+      filter: 'brightness(1.6)',
+      duration: 0.3,
+      ease: 'power2.in',
+    })
+    // Impact — snap to target
+    .to(clone, {
+      x: dx,
+      y: dy,
+      scale: 0.92,
+      filter: 'brightness(2.2)',
+      duration: 0.04,
+      ease: 'none',
+    })
+    // Recoil back partway
+    .to(clone, {
+      x: dx * 0.7,
+      y: dy * 0.7,
+      scale: 1.05,
+      filter: 'brightness(1.2)',
+      duration: 0.07,
+      ease: 'power1.out',
+    })
+    // Return home
+    .to(clone, {
+      x: 0,
+      y: 0,
+      scale: 1,
+      filter: 'brightness(1)',
+      duration: 0.24,
+      ease: 'power2.out',
+    })
   }
 )
 </script>
