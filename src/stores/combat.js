@@ -146,7 +146,7 @@ export const useCombatStore = defineStore('combat', {
 
       // Campaign rift state
       this.currentRiftId = riftId
-      this.battleIndex = 0
+      this.battleIndex = riftId ? meta.getRiftBattle(riftId) : 0
       this.isBossFight = false
       this.bossPassive = null
       this.bossPassiveDesc = null
@@ -842,9 +842,23 @@ export const useCombatStore = defineStore('combat', {
             this.victoryAnimating = false
             this.phase = 'rift-cleared'
           }, 2800)
+        } else if (rift) {
+          // Campaign non-boss battle — standalone mission, return to hub
+          const meta = useMetaStore()
+          const shards = (this.battleIndex + 1) * 10 * (rift.index + 1)
+          meta.advanceRiftBattle(rift.id)
+          meta.earnShards(shards)
+          meta.save()
+          this.lastRunShards = shards
+          this._log(`Battle won! +${shards} shards`, 'level')
+          this.victoryAnimating = true
+          setTimeout(() => {
+            this.victoryAnimating = false
+            this.phase = 'start-run'
+          }, 2800)
         } else {
-          // Normal battle victory
-          const goldEarned = rift ? rift.goldPerBattle : 10 + this.level * 5
+          // Endless mode — between-level shop/perks
+          const goldEarned = 10 + this.level * 5
           this.gold += goldEarned
           this._log(`Enemy defeated! +${goldEarned} gold`, 'level')
           this._generateOffers()
@@ -921,11 +935,7 @@ export const useCombatStore = defineStore('combat', {
       this._applyPerk(perk)
       sound.perk?.()
       this._log(`Perk: ${perk.name}`, 'perk')
-      if (this.currentRiftId) {
-        this.battleIndex++
-      } else {
-        this.level++
-      }
+      this.level++
       this.startLevel()
     },
 

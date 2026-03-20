@@ -20,6 +20,7 @@ export const useMetaStore = defineStore('meta', {
     campaignProgress: {
       highestUnlockedRift: 0,
       completedRifts: [],
+      riftProgress: {},  // { [riftId]: nextBattleIndex }
     },
   }),
 
@@ -77,6 +78,8 @@ export const useMetaStore = defineStore('meta', {
     isRiftUnlocked: (state) => (index) => index <= state.campaignProgress.highestUnlockedRift,
 
     isRiftCompleted: (state) => (id) => state.campaignProgress.completedRifts.includes(id),
+
+    getRiftBattle: (state) => (riftId) => state.campaignProgress.riftProgress[riftId] ?? 0,
 
     allRiftsCompleted(state) {
       return state.campaignProgress.completedRifts.length >= 6
@@ -145,6 +148,13 @@ export const useMetaStore = defineStore('meta', {
       }
     },
 
+    advanceRiftBattle(riftId) {
+      this.campaignProgress.riftProgress = {
+        ...this.campaignProgress.riftProgress,
+        [riftId]: (this.campaignProgress.riftProgress[riftId] ?? 0) + 1,
+      }
+    },
+
     buyUpgrade(upgradeId) {
       const upgrade = META_UPGRADES.find(u => u.id === upgradeId)
       if (!upgrade) return false
@@ -189,6 +199,7 @@ export const useMetaStore = defineStore('meta', {
         campaignProgress: {
           highestUnlockedRift: this.campaignProgress.highestUnlockedRift,
           completedRifts: [...this.campaignProgress.completedRifts],
+          riftProgress: { ...this.campaignProgress.riftProgress },
         },
       }))
     },
@@ -210,6 +221,7 @@ export const useMetaStore = defineStore('meta', {
             this.campaignProgress = {
               highestUnlockedRift: data.campaignProgress?.highestUnlockedRift ?? 0,
               completedRifts: data.campaignProgress?.completedRifts ?? [],
+              riftProgress: data.campaignProgress?.riftProgress ?? {},
             }
             if (Object.keys(this.collection).length === 0) this.seedStarterCollection()
             return
