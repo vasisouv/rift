@@ -18,6 +18,7 @@ const MAX_COPIES = 4
 const deck = ref(meta.customDeck ? [...meta.customDeck] : [...getStartingDeck()])
 
 const sortBy = ref('cost') // 'cost' or 'tier'
+const activeTab = ref('collection') // mobile tab: 'collection' | 'deck'
 const hoveredCard = ref(null)
 const alertMsg = ref(null)
 let alertTimer = null
@@ -152,10 +153,28 @@ function hideCard() {
       {{ alertMsg }}
     </div>
 
+    <!-- Mobile Tab Switcher -->
+    <div class="flex md:hidden mb-3 border border-white/[0.08] rounded-lg overflow-hidden shrink-0">
+      <button
+        class="flex-1 py-2 text-xs font-bold transition-colors"
+        :class="activeTab === 'collection' ? 'bg-energy/15 text-energy' : 'bg-surface text-dim'"
+        @click="activeTab = 'collection'"
+      >
+        Collection ({{ collectionCards.length }})
+      </button>
+      <button
+        class="flex-1 py-2 text-xs font-bold transition-colors"
+        :class="activeTab === 'deck' ? 'bg-energy/15 text-energy' : 'bg-surface text-dim'"
+        @click="activeTab = 'deck'"
+      >
+        Deck ({{ deck.length }}/{{ MAX_DECK }})
+      </button>
+    </div>
+
     <div class="flex gap-4 flex-1 min-h-0">
 
       <!-- Left: Collection (only cards with available copies) -->
-      <div class="flex-1 flex flex-col min-h-0">
+      <div :class="activeTab === 'collection' ? 'flex flex-1 flex-col min-h-0' : 'hidden md:flex md:flex-1 md:flex-col md:min-h-0'">
         <div class="flex items-center justify-between mb-2">
           <div class="text-[10px] font-bold text-dim uppercase tracking-widest">
             Collection
@@ -214,7 +233,7 @@ function hideCard() {
       </div>
 
       <!-- Right: Deck Panel -->
-      <div class="w-64 shrink-0 flex flex-col min-h-0 pl-4 border-l border-white/[0.08]">
+      <div :class="[activeTab === 'deck' ? 'flex flex-1 flex-col min-h-0' : 'hidden md:flex md:flex-col md:min-h-0', 'md:w-64 md:shrink-0 md:pl-4 md:border-l md:border-white/[0.08]']">
 
         <div class="flex items-center justify-between mb-2">
           <div class="text-[10px] font-bold text-dim uppercase tracking-widest">Your Deck</div>

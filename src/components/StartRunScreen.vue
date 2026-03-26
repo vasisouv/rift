@@ -72,7 +72,7 @@ function selectRift(rift) {
     <!-- Campaign section -->
     <div class="w-full max-w-xl">
       <div class="text-[10px] text-dim uppercase tracking-[0.3em] text-center mb-2">Campaign</div>
-      <div class="grid grid-cols-3 gap-3">
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div
           v-for="rift in RIFTS"
           :key="rift.id"
