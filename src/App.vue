@@ -37,7 +37,10 @@ onUnmounted(() => {
     <!-- Header -->
     <header class="sticky top-0 z-20 bg-surface/90 backdrop-blur border-b border-white/[0.08]">
       <div class="flex items-center justify-between px-3 md:px-5 py-2 md:py-2.5 max-w-6xl mx-auto w-full">
-        <h1 class="text-base font-extrabold tracking-[0.25em] text-energy glow-energy-sm uppercase">
+        <h1
+          class="text-base font-extrabold tracking-[0.25em] text-energy glow-energy-sm uppercase cursor-pointer hover:opacity-80 transition-opacity"
+          @click="combat.phase = 'start-run'"
+        >
           Rift
         </h1>
         <div class="flex gap-2">
