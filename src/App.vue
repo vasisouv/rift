@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import { useGameStore } from './stores/game.js'
 import { useCombatStore } from './stores/combat.js'
 import { useSoundStore } from './stores/sound.js'
@@ -16,8 +16,6 @@ import DeckBuilder from './components/DeckBuilder.vue'
 const game = useGameStore()
 const combat = useCombatStore()
 const sound = useSoundStore()
-
-const showSidebar = ref(false)
 
 let saveInterval = null
 
@@ -80,28 +78,8 @@ onUnmounted(() => {
           <CardArena />
         </section>
 
-        <!-- Sidebar toggle (mobile only) -->
-        <button
-          class="md:hidden fixed bottom-3 right-3 z-40 w-10 h-10 rounded-full bg-surface border border-white/20 flex items-center justify-center text-lg text-dim hover:text-energy hover:border-energy transition-colors shadow-lg"
-          @click="showSidebar = !showSidebar"
-        >
-          {{ showSidebar ? '✕' : '☰' }}
-        </button>
-
-        <!-- Sidebar backdrop (mobile only) -->
-        <div
-          v-if="showSidebar"
-          class="md:hidden fixed inset-0 bg-black/60 z-30"
-          @click="showSidebar = false"
-        />
-
-        <!-- Sidebar -->
-        <aside
-          class="shrink-0 flex flex-col gap-3 pl-3 border-l border-white/[0.07] min-h-0 overflow-y-auto
-                 fixed inset-y-0 right-0 z-30 w-64 bg-void/95 backdrop-blur pt-16 pb-4 pr-3 transition-transform duration-200
-                 md:static md:w-64 md:bg-transparent md:backdrop-blur-none md:pt-0 md:pb-0 md:pr-0 md:translate-x-0"
-          :class="showSidebar ? 'translate-x-0' : 'translate-x-full'"
-        >
+        <!-- Sidebar (desktop only) -->
+        <aside class="hidden md:flex w-64 shrink-0 flex-col gap-3 pl-3 border-l border-white/[0.07] min-h-0 overflow-hidden">
           <LevelInfo />
           <CombatLog class="flex-1 min-h-0" />
         </aside>
