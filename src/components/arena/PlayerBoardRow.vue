@@ -44,7 +44,7 @@ function onDrop(e) {
 
 <template>
   <div
-    class="h-full flex flex-col items-center gap-2 rounded-lg transition-colors duration-150"
+    class="h-full flex flex-col items-center gap-1 md:gap-2 rounded-lg transition-colors duration-150"
     :class="dragOver ? 'bg-energy/10 ring-2 ring-energy/50' : ''"
     @click="combat.selectedHandCardId && combat.playCardToBoard()"
     @dragover="onDragOver"
@@ -53,7 +53,7 @@ function onDrop(e) {
   >
 
     <!-- Player cards -->
-    <TransitionGroup name="deploy" tag="div" class="flex items-center justify-center gap-2 min-h-[90px]">
+    <TransitionGroup name="deploy" tag="div" class="flex items-center justify-center gap-1 md:gap-2 min-h-[60px] md:min-h-[90px]">
       <BoardCard
         v-for="card in combat.playerBoard"
         :key="card.instanceId"
@@ -74,8 +74,8 @@ function onDrop(e) {
     </TransitionGroup>
 
     <!-- Player hero — pinned to bottom -->
-    <div data-player-hero class="mt-auto flex flex-col items-center gap-1 px-4 py-2 select-none" @click.stop>
-      <div class="text-5xl leading-none">🧙</div>
+    <div data-player-hero class="mt-auto flex flex-col items-center gap-0.5 md:gap-1 px-3 md:px-4 py-1 md:py-2 select-none" @click.stop>
+      <div class="text-3xl md:text-5xl leading-none">🧙</div>
       <div class="text-[10px] font-bold text-energy tracking-wide">You</div>
       <div class="w-20 h-1.5 rounded-full bg-white/10 overflow-hidden">
         <div

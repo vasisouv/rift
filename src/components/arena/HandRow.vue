@@ -12,8 +12,8 @@ const combat = useCombatStore()
       <span class="text-[10px] text-dim">Deck: {{ combat.playerDeck.length }}</span>
     </div>
 
-    <div class="overflow-x-auto" style="scrollbar-width: thin">
-    <div class="flex items-end gap-2 pb-1 pt-6 pl-4 min-h-[100px]">
+    <div class="overflow-x-auto overflow-y-visible" style="scrollbar-width: thin">
+    <div class="flex items-end gap-1 md:gap-2 pb-1 pt-4 pl-2 md:pl-4 min-h-[80px] md:min-h-[100px]">
       <HandCard
         v-for="card in combat.playerHand"
         :key="card.instanceId"

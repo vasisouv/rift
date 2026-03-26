@@ -1,5 +1,6 @@
 <script setup>
 import { getCardDef } from '../data/cards.js'
+import { getKeyword } from '../data/keywords.js'
 
 const props = defineProps({
   card: { type: Object, required: true },
@@ -12,6 +13,13 @@ const emit = defineEmits(['click', 'drag-start'])
 const isSpell = props.card.type === 'spell'
 const spellDef = isSpell ? getCardDef(props.card.defId) : null
 
+const keywordText = !isSpell && props.card.keywords?.length
+  ? props.card.keywords.map(k => {
+      const id = typeof k === 'string' ? k : k.id
+      return getKeyword(id)?.name
+    }).filter(Boolean).join(' · ')
+  : ''
+
 function onDragStart(e) {
   if (!props.affordable || isSpell) { e.preventDefault(); return }
   e.dataTransfer.effectAllowed = 'move'
@@ -22,8 +30,8 @@ function onDragStart(e) {
 
 <template>
   <div
-    class="relative flex flex-col items-center gap-1 px-2.5 py-2.5 rounded-xl border
-           select-none transition-all duration-100 w-[100px] min-w-[100px] shrink-0"
+    class="relative flex flex-col items-center justify-center gap-0.5 md:gap-1 px-1.5 md:px-2.5 py-1 md:py-2.5 rounded-xl border
+           select-none transition-all duration-100 w-[78px] min-w-[78px] h-[90px] md:w-[100px] md:min-w-[100px] md:h-[140px] shrink-0"
     :class="[
       affordable ? 'cursor-pointer' : 'cursor-not-allowed',
       selected
@@ -40,9 +48,11 @@ function onDragStart(e) {
     @click="affordable && emit('click', card.instanceId)"
     @dragstart="onDragStart"
   >
-    <!-- Mana cost gem -->
+    <!-- Mana cost gem — pill inside card on mobile, circle outside on desktop -->
     <div
-      class="absolute -top-3.5 -left-3.5 w-9 h-9 rounded-full flex items-center justify-center text-lg font-extrabold border-2 shadow-lg z-10"
+      class="absolute z-10 flex items-center justify-center font-extrabold border-2 shadow-lg
+             top-1 left-1 px-1.5 py-0.5 rounded-md text-xs
+             md:-top-3.5 md:-left-3.5 md:px-0 md:py-0 md:w-9 md:h-9 md:rounded-full md:text-lg"
       :class="affordable
         ? isSpell ? 'bg-purple-600 border-purple-300 text-white' : 'bg-blue-600 border-blue-300 text-white'
         : 'bg-slate-700 border-slate-500 text-slate-400'"
@@ -57,11 +67,16 @@ function onDragStart(e) {
     </div>
 
     <!-- Emoji -->
-    <div class="text-4xl leading-none mt-1" draggable="false">{{ card.emoji }}</div>
+    <div class="text-2xl md:text-4xl leading-none mt-1" draggable="false">{{ card.emoji }}</div>
 
     <!-- Name -->
-    <div class="text-[11px] text-center text-slate-300 font-semibold leading-tight w-full" draggable="false">
+    <div class="text-[9px] md:text-[11px] text-center text-slate-300 font-semibold leading-tight w-full" draggable="false">
       {{ card.name }}
+    </div>
+
+    <!-- Keywords (minion) -->
+    <div v-if="keywordText" class="text-[8px] text-center leading-tight w-full px-0.5 opacity-80" :style="{ color: card.color }" draggable="false">
+      {{ keywordText }}
     </div>
 
     <!-- Spell: description -->

@@ -1,5 +1,6 @@
 // Card definitions for the Rift card game
 // Each card has: id, name, emoji, baseAtk, baseHp, manaCost, color, tier, description
+// Some cards have keywords: array of string IDs (flag keywords) or objects (effect keywords)
 
 export const CARD_DEFS = [
   // ─── Tier 1 — Cost 1 ─────────────────────────────────────────────────────
@@ -146,7 +147,8 @@ export const CARD_DEFS = [
     manaCost: 2,
     color: '#ff6600',
     tier: 2,
-    description: 'Burns bright, burns fast.',
+    keywords: [{ id: 'battlecry', effect: 'damage_random_enemy', value: 1 }],
+    description: 'Battlecry: 1 dmg to a random enemy.',
   },
   {
     id: 'arc_runner',
@@ -157,7 +159,8 @@ export const CARD_DEFS = [
     manaCost: 2,
     color: '#00ffcc',
     tier: 2,
-    description: 'Dashes through energy fields.',
+    keywords: ['shield'],
+    description: 'Shield. Dashes through energy fields.',
   },
   {
     id: 'mind_leech',
@@ -168,18 +171,20 @@ export const CARD_DEFS = [
     manaCost: 2,
     color: '#aa44ff',
     tier: 2,
-    description: 'Drains the will to fight.',
+    keywords: ['lifesteal'],
+    description: 'Lifesteal. Drains the will to fight.',
   },
   {
     id: 'void_hound',
     name: 'Void Hound',
     emoji: '🐺',
-    baseAtk: 3,
+    baseAtk: 2,
     baseHp: 3,
     manaCost: 2,
     color: '#66aaff',
     tier: 2,
-    description: 'Hunts through dimensional space.',
+    keywords: ['rush'],
+    description: 'Rush. Hunts through dimensional space.',
   },
   {
     id: 'storm_herald',
@@ -223,7 +228,8 @@ export const CARD_DEFS = [
     manaCost: 2,
     color: '#88ff44',
     tier: 2,
-    description: 'Releases toxic void spores.',
+    keywords: [{ id: 'deathrattle', effect: 'damage_all_enemies', value: 1 }],
+    description: 'Deathrattle: 1 dmg to all enemy cards.',
   },
 
   // ─── Tier 3 — Cost 3 ─────────────────────────────────────────────────────
@@ -236,7 +242,8 @@ export const CARD_DEFS = [
     manaCost: 3,
     color: '#ff8800',
     tier: 3,
-    description: 'Heavily armored brawler.',
+    keywords: ['shield'],
+    description: 'Shield. Heavily armored brawler.',
   },
   {
     id: 'void_mage',
@@ -247,7 +254,8 @@ export const CARD_DEFS = [
     manaCost: 3,
     color: '#bb44ff',
     tier: 3,
-    description: 'Channels void energy.',
+    keywords: [{ id: 'battlecry', effect: 'damage', value: 2, target: 'enemy_card' }],
+    description: 'Battlecry: 2 dmg to a target enemy.',
   },
   {
     id: 'runic_golem',
@@ -258,7 +266,8 @@ export const CARD_DEFS = [
     manaCost: 3,
     color: '#aa8866',
     tier: 3,
-    description: 'Ancient runes grant it life.',
+    keywords: ['taunt'],
+    description: 'Taunt. Ancient runes grant it life.',
   },
   {
     id: 'ember_wraith',
@@ -269,18 +278,20 @@ export const CARD_DEFS = [
     manaCost: 3,
     color: '#ff5500',
     tier: 3,
-    description: 'A soul consumed by flame.',
+    keywords: [{ id: 'deathrattle', effect: 'damage_random_enemy', value: 2 }],
+    description: 'Deathrattle: 2 dmg to a random enemy.',
   },
   {
     id: 'thunder_fox',
     name: 'Thunder Fox',
     emoji: '🦊',
-    baseAtk: 4,
+    baseAtk: 3,
     baseHp: 4,
     manaCost: 3,
     color: '#ffaa22',
     tier: 3,
-    description: 'Lightning swift predator.',
+    keywords: ['rush'],
+    description: 'Rush. Lightning swift predator.',
   },
   {
     id: 'acid_crawler',
@@ -313,7 +324,8 @@ export const CARD_DEFS = [
     manaCost: 3,
     color: '#5544bb',
     tier: 3,
-    description: 'Summons entities from shadow.',
+    keywords: [{ id: 'battlecry', effect: 'draw', value: 1 }],
+    description: 'Battlecry: Draw 1 card.',
   },
   {
     id: 'crystal_knight',
@@ -324,7 +336,8 @@ export const CARD_DEFS = [
     manaCost: 3,
     color: '#44ddff',
     tier: 3,
-    description: 'Armor forged from void crystals.',
+    keywords: ['taunt'],
+    description: 'Taunt. Armor forged from void crystals.',
   },
   {
     id: 'plague_beast',
@@ -392,7 +405,8 @@ export const CARD_DEFS = [
     manaCost: 4,
     color: '#6644cc',
     tier: 4,
-    description: 'Strikes from the darkness.',
+    keywords: ['rush'],
+    description: 'Rush. Strikes from the darkness.',
   },
   {
     id: 'void_knight',
@@ -403,7 +417,8 @@ export const CARD_DEFS = [
     manaCost: 4,
     color: '#8844dd',
     tier: 4,
-    description: 'Champion of the void realm.',
+    keywords: ['shield'],
+    description: 'Shield. Champion of the void realm.',
   },
   {
     id: 'plasma_beast',
@@ -436,7 +451,8 @@ export const CARD_DEFS = [
     manaCost: 4,
     color: '#889988',
     tier: 4,
-    description: 'Built for unwavering defense.',
+    keywords: ['taunt'],
+    description: 'Taunt. Built for unwavering defense.',
   },
   {
     id: 'chain_ghost',
@@ -447,7 +463,8 @@ export const CARD_DEFS = [
     manaCost: 4,
     color: '#bbaaff',
     tier: 4,
-    description: 'Bound to the battlefield eternally.',
+    keywords: [{ id: 'deathrattle', effect: 'draw', value: 1 }],
+    description: 'Deathrattle: Draw 1 card.',
   },
 
   // ─── Tier 5 — Cost 5 ─────────────────────────────────────────────────────
@@ -460,7 +477,8 @@ export const CARD_DEFS = [
     manaCost: 5,
     color: '#44ff88',
     tier: 5,
-    description: 'A resilient guardian.',
+    keywords: ['taunt'],
+    description: 'Taunt. A resilient guardian.',
   },
   {
     id: 'ravager',
@@ -561,7 +579,8 @@ export const CARD_DEFS = [
     manaCost: 6,
     color: '#8844ff',
     tier: 6,
-    description: 'Born from a dying star.',
+    keywords: [{ id: 'battlecry', effect: 'damage_all_enemies', value: 2 }],
+    description: 'Battlecry: 2 dmg to ALL enemy cards.',
   },
   {
     id: 'stellar_horror',
@@ -594,7 +613,8 @@ export const CARD_DEFS = [
     manaCost: 6,
     color: '#ff2244',
     tier: 6,
-    description: 'Harvests the light of dying stars.',
+    keywords: ['lifesteal'],
+    description: 'Lifesteal. Harvests the light of dying stars.',
   },
   {
     id: 'chaos_hydra',
@@ -730,7 +750,8 @@ export const CARD_DEFS = [
     manaCost: 8,
     color: '#aaddff',
     tier: 8,
-    description: 'Formed from collapsed starlight.',
+    keywords: ['shield'],
+    description: 'Shield. Formed from collapsed starlight.',
   },
   {
     id: 'void_emperor',
@@ -763,7 +784,8 @@ export const CARD_DEFS = [
     manaCost: 8,
     color: '#334455',
     tier: 8,
-    description: 'The last thing enemies ever see.',
+    keywords: ['rush'],
+    description: 'Rush. The last thing enemies ever see.',
   },
 
   // ─── Tier 9 — Cost 9 ─────────────────────────────────────────────────────
@@ -798,7 +820,8 @@ export const CARD_DEFS = [
     manaCost: 9,
     color: '#886644',
     tier: 9,
-    description: 'An impenetrable bastion of ruin.',
+    keywords: ['taunt'],
+    description: 'Taunt. An impenetrable bastion of ruin.',
   },
   {
     id: 'void_butterfly',
@@ -809,7 +832,8 @@ export const CARD_DEFS = [
     manaCost: 9,
     color: '#ff88ff',
     tier: 9,
-    description: 'Beautiful and utterly lethal.',
+    keywords: ['lifesteal'],
+    description: 'Lifesteal. Beautiful and utterly lethal.',
   },
 
   // ─── Tier 10 — Cost 10 ────────────────────────────────────────────────────

@@ -37,6 +37,8 @@ function makeInstance(defId, owner, atkBonus = 0) {
     manaCost: def.manaCost,
     color: def.color,
     owner,
+    keywords: def.keywords ? JSON.parse(JSON.stringify(def.keywords)) : [],
+    hasShield: def.keywords ? def.keywords.some(k => k === 'shield') : false,
     hasSummoningSickness: true,
     hasAttackedThisTurn: false,
     hitFlash: false,
@@ -88,6 +90,8 @@ export const useCombatStore = defineStore('combat', {
     attackingCardId: null,
     pendingSpellId: null,
     spellTargetMode: null, // 'enemy_card' | 'friendly_card' | null
+    pendingBattlecryCardId: null,
+    battlecryTargetMode: null, // 'enemy_card' | null
 
     // Rift / campaign state
     currentRiftId: null,
@@ -122,6 +126,28 @@ export const useCombatStore = defineStore('combat', {
     _log(msg, type = 'info') {
       this.combatLog.push({ msg, type, id: Date.now() + Math.random() })
       if (this.combatLog.length > 30) this.combatLog.shift()
+    },
+
+    // ── Keyword helpers ──────────────────────────────────────────────────────
+
+    _hasKeyword(card, id) {
+      if (!card.keywords) return false
+      return card.keywords.some(k => k === id || k.id === id)
+    },
+
+    _getKeywordEffect(card, id) {
+      if (!card.keywords) return null
+      return card.keywords.find(k => k.id === id) || null
+    },
+
+    _applyDamage(card, damage) {
+      if (card.hasShield) {
+        card.hasShield = false
+        this._log(`${card.name}'s Shield absorbs the hit!`, 'shield')
+        return 0
+      }
+      card.hp -= damage
+      return damage
     },
 
     // ── Run lifecycle ────────────────────────────────────────────────────────
@@ -235,6 +261,8 @@ export const useCombatStore = defineStore('combat', {
       this.attackingCardId = null
       this.pendingSpellId = null
       this.spellTargetMode = null
+      this.pendingBattlecryCardId = null
+      this.battlecryTargetMode = null
       this.currentTurn = 'player'
       this.phase = 'combat'
 
@@ -269,6 +297,13 @@ export const useCombatStore = defineStore('combat', {
 
     selectHandCard(id) {
       if (this.currentTurn !== 'player') return
+
+      // Cancel battlecry targeting if active
+      if (this.pendingBattlecryCardId) {
+        this.pendingBattlecryCardId = null
+        this.battlecryTargetMode = null
+      }
+
       if (this.selectedHandCardId === id) {
         this.selectedHandCardId = null
         this.pendingSpellId = null
@@ -312,13 +347,29 @@ export const useCombatStore = defineStore('combat', {
       card.hasSummoningSickness = true
       card.hasAttackedThisTurn = false
       this.playerBoard.push(card)
+
+      // Rush: can attack immediately
+      if (this._hasKeyword(card, 'rush')) {
+        card.hasSummoningSickness = false
+      }
+
       this.selectedHandCardId = null
       sound.cardPlay?.()
       this._log(`You played ${card.name}`, 'info')
+
+      // Battlecry
+      this._triggerBattlecry(card)
     },
 
     selectBoardCard(id) {
       if (this.currentTurn !== 'player') return
+
+      // Cancel battlecry targeting if active
+      if (this.pendingBattlecryCardId) {
+        this.pendingBattlecryCardId = null
+        this.battlecryTargetMode = null
+        return
+      }
 
       // Spell targeting on friendly card
       if (this.pendingSpellId && this.spellTargetMode === 'friendly_card') {
@@ -338,6 +389,18 @@ export const useCombatStore = defineStore('combat', {
     },
 
     async attackTarget(targetId) {
+      // Battlecry targeting on enemy card/hero
+      if (this.pendingBattlecryCardId && this.battlecryTargetMode === 'enemy_card') {
+        const card = this.playerBoard.find(c => c.instanceId === this.pendingBattlecryCardId)
+        if (card) {
+          const effect = this._getKeywordEffect(card, 'battlecry')
+          if (effect) this._executeBattlecry(card, effect, targetId)
+        }
+        this.pendingBattlecryCardId = null
+        this.battlecryTargetMode = null
+        return
+      }
+
       // Spell targeting on enemy card/hero
       if (this.pendingSpellId && this.spellTargetMode === 'enemy_card') {
         const spell = this.playerHand.find(c => c.instanceId === this.pendingSpellId)
@@ -348,6 +411,14 @@ export const useCombatStore = defineStore('combat', {
       if (!this.attackingCardId) return
       const attacker = this.playerBoard.find(c => c.instanceId === this.attackingCardId)
       if (!attacker) { this.attackingCardId = null; return }
+
+      // Taunt enforcement (attacks only — spells and battlecries bypass taunt)
+      const tauntCards = this.enemyBoard.filter(c => this._hasKeyword(c, 'taunt') && c.hp > 0)
+      if (tauntCards.length > 0) {
+        if (targetId === 'enemy-hero') return
+        const isTargetTaunt = this.enemyBoard.some(c => c.instanceId === targetId && this._hasKeyword(c, 'taunt'))
+        if (!isTargetTaunt) return
+      }
 
       // Trigger travel animation and wait for it to finish
       this.attackAnimation = { attackerId: this.attackingCardId, targetId, id: Date.now() }
@@ -363,6 +434,13 @@ export const useCombatStore = defineStore('combat', {
         this.enemyHp = Math.max(0, this.enemyHp - dmg)
         attacker.hasAttackedThisTurn = true
         this._flashCard(attacker)
+
+        // Lifesteal
+        if (this._hasKeyword(attacker, 'lifesteal')) {
+          this.playerHp = Math.min(this.playerMaxHp, this.playerHp + attacker.atk)
+          this._log(`${attacker.name} Lifesteal: +${attacker.atk} HP`, 'heal')
+        }
+
         this._checkVictory()
         return
       }
@@ -379,8 +457,8 @@ export const useCombatStore = defineStore('combat', {
       const defDmg = defender.atk
       sound.attack?.()
 
-      defender.hp -= atkDmg
-      attacker.hp -= defDmg
+      this._applyDamage(defender, atkDmg)
+      this._applyDamage(attacker, defDmg)
 
       this._flashCard(attacker)
       this._flashCard(defender)
@@ -388,9 +466,21 @@ export const useCombatStore = defineStore('combat', {
 
       attacker.hasAttackedThisTurn = true
 
+      // Keyword Lifesteal — heals ATK amount on any attack
+      if (this._hasKeyword(attacker, 'lifesteal')) {
+        if (attacker.owner === 'player') {
+          this.playerHp = Math.min(this.playerMaxHp, this.playerHp + attacker.atk)
+          this._log(`${attacker.name} Lifesteal: +${attacker.atk} HP`, 'heal')
+        } else {
+          this.enemyHp = Math.min(this.enemyMaxHp, this.enemyHp + attacker.atk)
+          this._log(`${attacker.name} Lifesteal: enemy +${attacker.atk} HP`, 'heal')
+        }
+      }
+
+      // Perk lifesteal — heals 1 on kill
       if (this._lifesteal && attacker.owner === 'player' && defender.hp <= 0) {
         this.playerHp = Math.min(this.playerMaxHp, this.playerHp + 1)
-        this._log('Lifesteal: +1 HP', 'heal')
+        this._log('Lifesteal perk: +1 HP', 'heal')
       }
 
       this._checkCardDeath(attacker)
@@ -399,6 +489,12 @@ export const useCombatStore = defineStore('combat', {
 
     _checkCardDeath(card) {
       if (card.hp > 0) return
+      if (card._isDead) return
+      card._isDead = true
+
+      // Deathrattle fires before removal
+      this._triggerDeathrattle(card)
+
       const sound = useSoundStore()
       if (card.owner === 'player') {
         this.playerBoard = this.playerBoard.filter(c => c.instanceId !== card.instanceId)
@@ -455,7 +551,7 @@ export const useCombatStore = defineStore('combat', {
           } else {
             const target = this.enemyBoard.find(c => c.instanceId === targetId)
             if (target) {
-              target.hp -= dmg
+              this._applyDamage(target, dmg)
               this._flashCard(target)
               this._log(`${spell.name} deals ${dmg} to ${target.name}`, 'spell')
               this._checkCardDeath(target)
@@ -483,7 +579,7 @@ export const useCombatStore = defineStore('combat', {
           const aoeDmg = def.spellValue + bonus
           const targets = [...this.enemyBoard]
           for (const card of targets) {
-            card.hp -= aoeDmg
+            this._applyDamage(card, aoeDmg)
             this._flashCard(card)
           }
           this._log(`${spell.name} hits all enemies for ${aoeDmg}`, 'spell')
@@ -510,7 +606,7 @@ export const useCombatStore = defineStore('combat', {
           } else {
             const target = this.enemyBoard.find(c => c.instanceId === targetId)
             if (target) {
-              target.hp -= dhDmg
+              this._applyDamage(target, dhDmg)
               this._flashCard(target)
               this._log(`${spell.name} deals ${dhDmg} to ${target.name}`, 'spell')
               this._checkCardDeath(target)
@@ -545,7 +641,7 @@ export const useCombatStore = defineStore('combat', {
           const targets = this.playerBoard.filter(c => c.hp > 0)
           if (targets.length > 0) {
             const target = targets.reduce((min, c) => c.hp < min.hp ? c : min, targets[0])
-            target.hp -= def.spellValue
+            this._applyDamage(target, def.spellValue)
             this._flashCard(target)
             this._log(`Enemy ${spell.name} deals ${def.spellValue} to ${target.name}`, 'spell')
             this._checkCardDeath(target)
@@ -576,7 +672,7 @@ export const useCombatStore = defineStore('combat', {
         case 'damage_all': {
           const targets = [...this.playerBoard]
           for (const card of targets) {
-            card.hp -= def.spellValue
+            this._applyDamage(card, def.spellValue)
             this._flashCard(card)
           }
           this._log(`Enemy ${spell.name} hits all your cards for ${def.spellValue}`, 'spell')
@@ -599,7 +695,7 @@ export const useCombatStore = defineStore('combat', {
           const targets = this.playerBoard.filter(c => c.hp > 0)
           if (targets.length > 0) {
             const target = targets.reduce((min, c) => c.hp < min.hp ? c : min, targets[0])
-            target.hp -= def.spellValue.damage
+            this._applyDamage(target, def.spellValue.damage)
             this._flashCard(target)
             this._log(`Enemy ${spell.name} deals ${def.spellValue.damage} to ${target.name}`, 'spell')
             this._checkCardDeath(target)
@@ -633,6 +729,8 @@ export const useCombatStore = defineStore('combat', {
       this.attackingCardId = null
       this.pendingSpellId = null
       this.spellTargetMode = null
+      this.pendingBattlecryCardId = null
+      this.battlecryTargetMode = null
       this.currentTurn = 'enemy'
       this._doEnemyTurn()
     },
@@ -669,7 +767,7 @@ export const useCombatStore = defineStore('combat', {
           if (this.bossPassiveCounter % 2 === 0) {
             const targets = [...this.playerBoard]
             for (const card of targets) {
-              card.hp -= 1
+              this._applyDamage(card, 1)
               this._flashCard(card)
             }
             if (targets.length > 0) {
@@ -684,7 +782,7 @@ export const useCombatStore = defineStore('combat', {
             const n = Math.floor(this.bossPassiveCounter / 3)
             const targets = [...this.playerBoard]
             for (const card of targets) {
-              card.hp -= n
+              this._applyDamage(card, n)
               this._flashCard(card)
             }
             this.playerHp = Math.max(0, this.playerHp - n)
@@ -731,6 +829,12 @@ export const useCombatStore = defineStore('combat', {
             card.hasSummoningSickness = true
             card.hasAttackedThisTurn = false
             this.enemyBoard.push(card)
+
+            // Rush: can attack immediately
+            if (this._hasKeyword(card, 'rush')) {
+              card.hasSummoningSickness = false
+            }
+
             // Boss passive: buff_on_play
             if (this.bossPassive === 'buff_on_play') {
               card.atk += 1
@@ -740,6 +844,9 @@ export const useCombatStore = defineStore('combat', {
             }
             sound.cardPlay?.()
             this._log(`Enemy plays ${card.name}`, 'info')
+
+            // Battlecry
+            this._triggerBattlecry(card)
           }
           played = true
         }
@@ -751,9 +858,13 @@ export const useCombatStore = defineStore('combat', {
         await delay(750)
         if (this.phase !== 'combat') return
 
+        // Taunt: prioritize taunt cards
         const playerCards = this.playerBoard.filter(c => c.hp > 0)
-        if (playerCards.length > 0) {
-          const target = playerCards.reduce((min, c) => c.hp < min.hp ? c : min, playerCards[0])
+        const playerTaunts = playerCards.filter(c => this._hasKeyword(c, 'taunt'))
+        const validTargets = playerTaunts.length > 0 ? playerTaunts : playerCards
+
+        if (validTargets.length > 0) {
+          const target = validTargets.reduce((min, c) => c.hp < min.hp ? c : min, validTargets[0])
           await this._resolveEnemyAttackCard(attacker, target)
         } else {
           this.attackAnimation = { attackerId: attacker.instanceId, targetId: 'player-hero', id: Date.now() }
@@ -764,6 +875,13 @@ export const useCombatStore = defineStore('combat', {
           this.playerHp = Math.max(0, this.playerHp - dmg)
           attacker.hasAttackedThisTurn = true
           this._flashCard(attacker)
+
+          // Lifesteal
+          if (this._hasKeyword(attacker, 'lifesteal')) {
+            this.enemyHp = Math.min(this.enemyMaxHp, this.enemyHp + attacker.atk)
+            this._log(`${attacker.name} Lifesteal: enemy +${attacker.atk} HP`, 'heal')
+          }
+
           this._checkPlayerDeath()
           if (this.phase !== 'combat') return
         }
@@ -781,8 +899,8 @@ export const useCombatStore = defineStore('combat', {
       this.attackAnimation = { attackerId: attacker.instanceId, targetId: defender.instanceId, id: Date.now() }
       await this._waitForAnimation()
 
-      defender.hp -= atkDmg
-      attacker.hp -= defDmg
+      this._applyDamage(defender, atkDmg)
+      this._applyDamage(attacker, defDmg)
 
       this._flashCard(attacker)
       this._flashCard(defender)
@@ -790,6 +908,12 @@ export const useCombatStore = defineStore('combat', {
       this._log(`Enemy ${attacker.name} (${atkDmg}) vs your ${defender.name} (${defDmg})`, 'hit')
 
       attacker.hasAttackedThisTurn = true
+
+      // Lifesteal
+      if (this._hasKeyword(attacker, 'lifesteal')) {
+        this.enemyHp = Math.min(this.enemyMaxHp, this.enemyHp + attacker.atk)
+        this._log(`${attacker.name} Lifesteal: enemy +${attacker.atk} HP`, 'heal')
+      }
 
       this._checkCardDeath(attacker)
       this._checkCardDeath(defender)
@@ -814,6 +938,143 @@ export const useCombatStore = defineStore('combat', {
       }
 
       this.currentTurn = 'player'
+    },
+
+    // ── Battlecry ─────────────────────────────────────────────────────────────
+
+    _triggerBattlecry(card) {
+      const effect = this._getKeywordEffect(card, 'battlecry')
+      if (!effect) return
+
+      if (card.owner === 'enemy') {
+        this._executeBattlecryAI(card, effect)
+        return
+      }
+
+      // Player targeted battlecry — enter targeting mode
+      if (effect.target === 'enemy_card') {
+        this.pendingBattlecryCardId = card.instanceId
+        this.battlecryTargetMode = 'enemy_card'
+        this._log(`${card.name} Battlecry: choose a target`, 'spell')
+        return
+      }
+
+      // Auto-target effects
+      this._executeBattlecry(card, effect)
+    },
+
+    _executeBattlecry(card, effect, targetId = null) {
+      switch (effect.effect) {
+        case 'damage': {
+          if (targetId === 'enemy-hero') {
+            this.enemyHp = Math.max(0, this.enemyHp - effect.value)
+            this._log(`${card.name} Battlecry: ${effect.value} dmg to enemy hero`, 'spell')
+            this._checkVictory()
+          } else if (targetId) {
+            const target = this.enemyBoard.find(c => c.instanceId === targetId)
+            if (target) {
+              this._applyDamage(target, effect.value)
+              this._flashCard(target)
+              this._log(`${card.name} Battlecry: ${effect.value} dmg to ${target.name}`, 'spell')
+              this._checkCardDeath(target)
+            }
+          }
+          break
+        }
+        case 'damage_random_enemy': {
+          const enemies = card.owner === 'player'
+            ? this.enemyBoard.filter(c => c.hp > 0)
+            : this.playerBoard.filter(c => c.hp > 0)
+          if (enemies.length > 0) {
+            const target = enemies[Math.floor(Math.random() * enemies.length)]
+            this._applyDamage(target, effect.value)
+            this._flashCard(target)
+            this._log(`${card.name} Battlecry: ${effect.value} dmg to ${target.name}`, 'spell')
+            this._checkCardDeath(target)
+          }
+          break
+        }
+        case 'damage_all_enemies': {
+          const enemies = card.owner === 'player'
+            ? [...this.enemyBoard]
+            : [...this.playerBoard]
+          for (const t of enemies) {
+            this._applyDamage(t, effect.value)
+            this._flashCard(t)
+          }
+          this._log(`${card.name} Battlecry: ${effect.value} dmg to all enemies`, 'spell')
+          for (const t of enemies) this._checkCardDeath(t)
+          break
+        }
+        case 'draw': {
+          for (let i = 0; i < effect.value; i++) this.drawCard(card.owner)
+          this._log(`${card.name} Battlecry: drew ${effect.value} card(s)`, 'spell')
+          break
+        }
+      }
+      this.pendingBattlecryCardId = null
+      this.battlecryTargetMode = null
+    },
+
+    _executeBattlecryAI(card, effect) {
+      if (effect.effect === 'damage' || effect.effect === 'damage_random_enemy') {
+        // AI targets lowest HP player card
+        const targets = this.playerBoard.filter(c => c.hp > 0)
+        if (targets.length > 0) {
+          const target = targets.reduce((min, c) => c.hp < min.hp ? c : min, targets[0])
+          this._applyDamage(target, effect.value)
+          this._flashCard(target)
+          this._log(`${card.name} Battlecry: ${effect.value} dmg to ${target.name}`, 'spell')
+          this._checkCardDeath(target)
+        } else {
+          // No cards — hit player hero
+          this.playerHp = Math.max(0, this.playerHp - effect.value)
+          this._log(`${card.name} Battlecry: ${effect.value} dmg to you`, 'spell')
+          this._checkPlayerDeath()
+        }
+      } else {
+        this._executeBattlecry(card, effect)
+      }
+    },
+
+    // ── Deathrattle ──────────────────────────────────────────────────────────
+
+    _triggerDeathrattle(card) {
+      const effect = this._getKeywordEffect(card, 'deathrattle')
+      if (!effect) return
+
+      switch (effect.effect) {
+        case 'damage_all_enemies': {
+          const enemies = card.owner === 'player'
+            ? [...this.enemyBoard]
+            : [...this.playerBoard]
+          for (const t of enemies) {
+            this._applyDamage(t, effect.value)
+            this._flashCard(t)
+          }
+          this._log(`${card.name} Deathrattle: ${effect.value} dmg to all enemies`, 'spell')
+          for (const t of enemies) this._checkCardDeath(t)
+          break
+        }
+        case 'damage_random_enemy': {
+          const enemies = card.owner === 'player'
+            ? this.enemyBoard.filter(c => c.hp > 0)
+            : this.playerBoard.filter(c => c.hp > 0)
+          if (enemies.length > 0) {
+            const target = enemies[Math.floor(Math.random() * enemies.length)]
+            this._applyDamage(target, effect.value)
+            this._flashCard(target)
+            this._log(`${card.name} Deathrattle: ${effect.value} dmg to ${target.name}`, 'spell')
+            this._checkCardDeath(target)
+          }
+          break
+        }
+        case 'draw': {
+          for (let i = 0; i < effect.value; i++) this.drawCard(card.owner)
+          this._log(`${card.name} Deathrattle: drew ${effect.value} card(s)`, 'spell')
+          break
+        }
+      }
     },
 
     // ── Victory / Defeat ─────────────────────────────────────────────────────

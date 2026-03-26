@@ -13,6 +13,7 @@ const typeColors = {
   shop:   'text-rate',
   perk:   'text-rate',
   spell:  'text-purple-300',
+  shield: 'text-cyan-300',
   heal:   'text-green-300',
   death:  'text-hp',
   info:   'text-dim',
